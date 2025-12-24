@@ -1,0 +1,15 @@
+# OPSI PackForge Requirements
+# Python 3.8+
+
+# Keine externen Abhängigkeiten erforderlich
+# Das Tool nutzt nur Python Standard-Bibliotheken:
+# - tkinter (GUI)
+# - json (Konfiguration)
+# - pathlib (Pfad-Operationen)
+# - shutil (Datei-Operationen)
+# - zipfile (Archivierung)
+# - datetime (Zeitstempel)
+# - threading (Async-Operationen)
+
+# Falls tkinter nicht installiert ist (Linux):
+# sudo apt-get install python3-tk
