@@ -8,7 +8,7 @@ param(
     [switch]$Debug
 )
 
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Continue"
 $ProgressPreference = 'SilentlyContinue'
 
 # Farben für die Konsole
@@ -57,30 +57,46 @@ function Install-PortablePython {
     
     $pythonZip = "$WorkDir\python.zip"
     
-    if (-not (Test-Path $PythonDir)) {
-        Write-Host "      Lade Python herunter..." -ForegroundColor Gray
-        Invoke-WebRequest -Uri $pythonUrl -OutFile $pythonZip
+    try {
+        if (-not (Test-Path $PythonDir)) {
+            Write-Host "      Lade Python herunter..." -ForegroundColor Gray
+            Write-Host "      URL: $pythonUrl" -ForegroundColor DarkGray
+            
+            # Alternative Download-Methode mit besserem Proxy-Support
+            $client = New-Object System.Net.WebClient
+            $client.Proxy.Credentials = [System.Net.CredentialCache]::DefaultNetworkCredentials
+            $client.DownloadFile($pythonUrl, $pythonZip)
+            
+            Write-Host "      Entpacke Python..." -ForegroundColor Gray
+            Expand-Archive -Path $pythonZip -DestinationPath $PythonDir -Force
+            Remove-Item $pythonZip
+            
+            # Python konfigurieren für pip
+            $pthFile = "$PythonDir\python311._pth"
+            if (Test-Path $pthFile) {
+                $content = Get-Content $pthFile
+                $content = $content -replace "#import site", "import site"
+                $content += "`nLib\site-packages"
+                Set-Content -Path $pthFile -Value $content
+            }
+            
+            # Pip installieren - optional, da nicht zwingend erforderlich
+            Write-Host "      Installiere pip (optional)..." -ForegroundColor Gray
+            try {
+                $getPip = "$WorkDir\get-pip.py"
+                $client.DownloadFile($pipUrl, $getPip)
+                & "$PythonDir\python.exe" $getPip --no-warn-script-location 2>$null
+                Remove-Item $getPip -ErrorAction SilentlyContinue
+            } catch {
+                Write-Host "      [WARNUNG] Pip konnte nicht installiert werden (nicht kritisch)" -ForegroundColor Yellow
+            }
+        }
         
-        Write-Host "      Entpacke Python..." -ForegroundColor Gray
-        Expand-Archive -Path $pythonZip -DestinationPath $PythonDir -Force
-        Remove-Item $pythonZip
-        
-        # Python konfigurieren für pip
-        $pthFile = "$PythonDir\python311._pth"
-        $content = Get-Content $pthFile
-        $content = $content -replace "#import site", "import site"
-        $content += "`nLib\site-packages"
-        Set-Content -Path $pthFile -Value $content
-        
-        # Pip installieren
-        Write-Host "      Installiere pip..." -ForegroundColor Gray
-        $getPip = "$WorkDir\get-pip.py"
-        Invoke-WebRequest -Uri $pipUrl -OutFile $getPip
-        & "$PythonDir\python.exe" $getPip --no-warn-script-location
-        Remove-Item $getPip
+        Write-Host "[OK] Python ist installiert" -ForegroundColor Green
+    } catch {
+        Write-Host "[FEHLER] Python-Installation fehlgeschlagen: $_" -ForegroundColor Red
+        throw
     }
-    
-    Write-Host "[OK] Python ist installiert" -ForegroundColor Green
 }
 
 # Anwendung herunterladen
@@ -103,6 +119,9 @@ function Download-Application {
         "requirements.txt"
     )
     
+    $client = New-Object System.Net.WebClient
+    $client.Proxy.Credentials = [System.Net.CredentialCache]::DefaultNetworkCredentials
+    
     foreach ($file in $files) {
         $url = "$baseUrl/$file"
         $filename = Split-Path $file -Leaf
@@ -110,14 +129,16 @@ function Download-Application {
         
         Write-Host "      Lade $filename..." -ForegroundColor Gray
         try {
-            Invoke-WebRequest -Uri $url -OutFile $destination
+            $client.DownloadFile($url, $destination)
         } catch {
             Write-Host "[FEHLER] Konnte $filename nicht herunterladen: $_" -ForegroundColor Red
-            exit 1
+            Write-Host "      URL: $url" -ForegroundColor DarkGray
+            return $false
         }
     }
     
     Write-Host "[OK] Anwendung heruntergeladen" -ForegroundColor Green
+    return $true
 }
 
 # Python-Pakete installieren
@@ -151,12 +172,29 @@ function Create-DesktopShortcut {
 
 # Hauptinstallation
 try {
+    # Debug-Modus
+    if ($Debug) {
+        $ErrorActionPreference = "Continue"
+        $VerbosePreference = "Continue"
+    }
+    
+    # Python installieren
     if (-not (Test-Path "$PythonDir\python.exe") -or $Update) {
         Install-PortablePython
     }
     
-    Download-Application
+    # Anwendung herunterladen
+    $downloadSuccess = Download-Application
+    if (-not $downloadSuccess) {
+        Write-Host "[FEHLER] Download fehlgeschlagen. Prüfen Sie die Internetverbindung." -ForegroundColor Red
+        Read-Host "Drücken Sie Enter zum Beenden"
+        exit 1
+    }
+    
+    # Python-Pakete installieren (optional)
     Install-PythonPackages
+    
+    # Desktop-Verknüpfung erstellen
     Create-DesktopShortcut
     
     Write-Host ""
@@ -187,6 +225,9 @@ try {
     Write-Host "Bitte prüfen Sie:" -ForegroundColor Yellow
     Write-Host "  - Internetverbindung" -ForegroundColor Yellow
     Write-Host "  - Firewall-Einstellungen" -ForegroundColor Yellow
+    Write-Host "  - Proxy-Einstellungen" -ForegroundColor Yellow
     Write-Host "  - GitHub Repository: https://github.com/$GithubUser/$Repo" -ForegroundColor Yellow
+    Write-Host ""
+    Read-Host "Drücken Sie Enter zum Beenden"
     exit 1
 }
