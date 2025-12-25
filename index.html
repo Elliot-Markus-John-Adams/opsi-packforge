@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OPSI PackForge - Tool für paedML Linux</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            line-height: 1.6;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        header {
+            text-align: center;
+            padding: 60px 20px;
+            color: white;
+        }
+        h1 {
+            font-size: 3em;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        .card {
+            background: white;
+            border-radius: 10px;
+            padding: 30px;
+            margin: 20px 0;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        .code-block {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            overflow-x: auto;
+            margin: 20px 0;
+        }
+        .button {
+            display: inline-block;
+            padding: 12px 30px;
+            background: #0078d4;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            transition: background 0.3s;
+        }
+        .button:hover {
+            background: #005a9e;
+        }
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+        .feature {
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        .footer {
+            text-align: center;
+            padding: 30px;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📦 OPSI PackForge</h1>
+            <p style="font-size: 1.3em; opacity: 0.9;">Einfaches Tool zur OPSI-Paket-Erstellung für paedML Linux</p>
+        </header>
+        
+        <div class="card">
+            <h2>🚀 Schnellstart</h2>
+            <p>Installation mit einem einzigen PowerShell-Befehl:</p>
+            <div class="code-block">
+[System.Net.WebRequest]::DefaultWebProxy.Credentials = [System.Net.CredentialCache]::DefaultCredentials; iex ((New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/Elliot-Markus-John-Adams/opsi-packforge/main/install.ps1'))
+            </div>
+            <p style="margin-top: 20px;">
+                <a href="https://github.com/Elliot-Markus-John-Adams/opsi-packforge" class="button">📖 Dokumentation auf GitHub</a>
+            </p>
+        </div>
+        
+        <div class="card">
+            <h2>✨ Features</h2>
+            <div class="features">
+                <div class="feature">
+                    <h3>📝 Einfache Erstellung</h3>
+                    <p>Interaktives Menü führt durch die Paket-Erstellung</p>
+                </div>
+                <div class="feature">
+                    <h3>🔧 OPSI-konform</h3>
+                    <p>Erstellt automatisch control und opsiscript Dateien</p>
+                </div>
+                <div class="feature">
+                    <h3>🖥️ SSH-Integration</h3>
+                    <p>Direkte Verbindung zum OPSI-Server</p>
+                </div>
+                <div class="feature">
+                    <h3>📦 Setup-Support</h3>
+                    <p>Automatisches Einbinden von Setup-Dateien</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <h2>📋 Workflow</h2>
+            <ol style="margin-left: 20px;">
+                <li>Tool installieren mit PowerShell-Befehl</li>
+                <li>Desktop-Verknüpfung "OPSI PackForge" starten</li>
+                <li>Paket-Informationen eingeben (ID, Name, Version)</li>
+                <li>Optional: Setup-Datei und Silent-Parameter angeben</li>
+                <li>Paket wird mit OPSI-Struktur erstellt</li>
+                <li>Optional: SSH-Verbindung zum Server für Deployment</li>
+            </ol>
+        </div>
+        
+        <div class="card">
+            <h2>🛠️ Beispiel</h2>
+            <div class="code-block">
+Paket-ID: firefox
+Paket-Name: Mozilla Firefox
+Version: 120.0.0
+Setup-Datei: C:\Downloads\Firefox_Setup.exe
+Silent-Parameter: /S
+
+→ Erstellt: firefox_120.0.0/
+   ├── OPSI/control
+   └── CLIENT_DATA/
+       ├── setup.opsiscript
+       └── Firefox_Setup.exe
+            </div>
+        </div>
+        
+        <footer class="footer">
+            <p>© 2024 OPSI PackForge - Entwickelt für paedML Linux</p>
+            <p><a href="https://github.com/Elliot-Markus-John-Adams/opsi-packforge" style="color: white;">GitHub Repository</a></p>
+        </footer>
+    </div>
+</body>
+</html>
