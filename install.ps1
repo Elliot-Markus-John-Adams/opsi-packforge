@@ -145,13 +145,10 @@ function Download-Application {
 function Install-PythonPackages {
     Write-Host "[INFO] Installiere Python-Pakete..." -ForegroundColor Green
     
-    $requirementsFile = "$AppDir\requirements.txt"
-    if (Test-Path $requirementsFile) {
-        & "$PythonDir\python.exe" -m pip install --upgrade pip --no-warn-script-location 2>$null
-        & "$PythonDir\python.exe" -m pip install -r $requirementsFile --no-warn-script-location 2>$null
-    }
+    # Tkinter ist in Python Embedded enthalten, keine weiteren Pakete nötig
+    Write-Host "      Keine zusätzlichen Pakete erforderlich" -ForegroundColor Gray
     
-    Write-Host "[OK] Python-Pakete installiert" -ForegroundColor Green
+    Write-Host "[OK] Python-Pakete bereit" -ForegroundColor Green
 }
 
 # Desktop-Verknüpfung erstellen
