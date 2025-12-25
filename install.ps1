@@ -50,84 +50,118 @@ switch ($choice) {
             Write-Host "Schritt 3: Entpacke Python..." -ForegroundColor Yellow
             Expand-Archive -Path $pythonZip -DestinationPath "$installPath\python" -Force
             Remove-Item $pythonZip
+            
+            # Python konfigurieren für tkinter
+            $pthFile = "$installPath\python\python311._pth"
+            if (Test-Path $pthFile) {
+                $content = Get-Content $pthFile
+                $content = $content -replace "#import site", "import site"
+                Set-Content -Path $pthFile -Value $content
+            }
+            
             Write-Host "OK - Python installiert" -ForegroundColor Green
             Write-Host ""
             
             # Schritt 4
-            Write-Host "Schritt 4: Erstelle OPSI PackForge GUI..." -ForegroundColor Yellow
+            Write-Host "Schritt 4: Erstelle OPSI PackForge..." -ForegroundColor Yellow
             $appPath = "$installPath\app"
             New-Item -ItemType Directory -Path $appPath -Force | Out-Null
             
-            # Erstelle die GUI-Anwendung direkt
-            $guiCode = @'
-import tkinter as tk
-from tkinter import ttk, messagebox, filedialog
-import os
-from datetime import datetime
+            # Erstelle ein einfaches Batch-Script als GUI-Alternative
+            $batchScript = @'
+@echo off
+title OPSI PackForge v1.0
+color 0A
 
-class OPSIPackForge:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("OPSI PackForge v1.0")
-        self.root.geometry("600x400")
-        
-        # Header
-        header = tk.Label(root, text="OPSI PackForge", font=("Arial", 16, "bold"))
-        header.pack(pady=10)
-        
-        # Form
-        frame = ttk.Frame(root, padding="20")
-        frame.pack(fill="both", expand=True)
-        
-        ttk.Label(frame, text="Paket-ID:").grid(row=0, column=0, sticky="w", pady=5)
-        self.package_id = ttk.Entry(frame, width=30)
-        self.package_id.grid(row=0, column=1, pady=5)
-        
-        ttk.Label(frame, text="Name:").grid(row=1, column=0, sticky="w", pady=5)
-        self.package_name = ttk.Entry(frame, width=30)
-        self.package_name.grid(row=1, column=1, pady=5)
-        
-        ttk.Label(frame, text="Version:").grid(row=2, column=0, sticky="w", pady=5)
-        self.package_version = ttk.Entry(frame, width=30)
-        self.package_version.grid(row=2, column=1, pady=5)
-        
-        # Button
-        ttk.Button(frame, text="Paket generieren", command=self.generate).grid(row=3, column=0, columnspan=2, pady=20)
-        
-    def generate(self):
-        if not all([self.package_id.get(), self.package_name.get(), self.package_version.get()]):
-            messagebox.showerror("Fehler", "Bitte alle Felder ausfuellen!")
-            return
-        
-        output_dir = filedialog.askdirectory(title="Ausgabe-Verzeichnis waehlen")
-        if output_dir:
-            pkg_dir = os.path.join(output_dir, f"{self.package_id.get()}_{self.package_version.get()}")
-            os.makedirs(os.path.join(pkg_dir, "OPSI"), exist_ok=True)
-            os.makedirs(os.path.join(pkg_dir, "CLIENT_DATA"), exist_ok=True)
-            
-            # Control file
-            with open(os.path.join(pkg_dir, "OPSI", "control"), "w") as f:
-                f.write(f"[Product]\nid: {self.package_id.get()}\nname: {self.package_name.get()}\nversion: {self.package_version.get()}\n")
-            
-            messagebox.showinfo("Erfolg", f"Paket erstellt in:\n{pkg_dir}")
+:menu
+cls
+echo.
+echo =====================================
+echo       OPSI PackForge v1.0
+echo =====================================
+echo.
+echo [1] Neues Paket erstellen
+echo [2] Hilfe
+echo [3] Beenden
+echo.
+set /p choice="Ihre Wahl: "
 
-root = tk.Tk()
-app = OPSIPackForge(root)
-root.mainloop()
+if "%choice%"=="1" goto create
+if "%choice%"=="2" goto help
+if "%choice%"=="3" exit
+goto menu
+
+:create
+cls
+echo.
+echo === NEUES OPSI-PAKET ERSTELLEN ===
+echo.
+set /p pkgid="Paket-ID (z.B. firefox): "
+set /p pkgname="Paket-Name: "
+set /p pkgversion="Version (z.B. 1.0.0): "
+set /p output="Ausgabe-Ordner (Enter fuer Desktop): "
+
+if "%output%"=="" set output=%USERPROFILE%\Desktop
+
+set pkgdir=%output%\%pkgid%_%pkgversion%
+
+echo.
+echo Erstelle Paket-Struktur...
+mkdir "%pkgdir%\OPSI" 2>nul
+mkdir "%pkgdir%\CLIENT_DATA" 2>nul
+
+echo [Product] > "%pkgdir%\OPSI\control"
+echo type: localboot >> "%pkgdir%\OPSI\control"
+echo id: %pkgid% >> "%pkgdir%\OPSI\control"
+echo name: %pkgname% >> "%pkgdir%\OPSI\control"
+echo version: %pkgversion% >> "%pkgdir%\OPSI\control"
+echo priority: 0 >> "%pkgdir%\OPSI\control"
+echo licenseRequired: False >> "%pkgdir%\OPSI\control"
+echo setupScript: setup.opsiscript >> "%pkgdir%\OPSI\control"
+
+echo ; Setup script for %pkgname% > "%pkgdir%\CLIENT_DATA\setup.opsiscript"
+echo [Actions] >> "%pkgdir%\CLIENT_DATA\setup.opsiscript"
+echo Message "Installing %pkgname% %pkgversion%" >> "%pkgdir%\CLIENT_DATA\setup.opsiscript"
+
+echo.
+echo ===================================
+echo PAKET ERFOLGREICH ERSTELLT!
+echo ===================================
+echo.
+echo Paket-Verzeichnis:
+echo %pkgdir%
+echo.
+pause
+goto menu
+
+:help
+cls
+echo.
+echo === HILFE ===
+echo.
+echo OPSI PackForge erstellt OPSI-Paket-Strukturen
+echo fuer die paedML Linux Umgebung.
+echo.
+echo Erstellt:
+echo - OPSI/control Datei
+echo - CLIENT_DATA/setup.opsiscript
+echo.
+pause
+goto menu
 '@
             
-            $guiCode | Out-File -FilePath "$appPath\opsi_packforge.py" -Encoding UTF8
-            Write-Host "OK - GUI erstellt" -ForegroundColor Green
+            $batchScript | Out-File -FilePath "$appPath\opsi_packforge.bat" -Encoding ASCII
+            Write-Host "OK - Anwendung erstellt" -ForegroundColor Green
             Write-Host ""
             
             # Schritt 5
             Write-Host "Schritt 5: Erstelle Desktop-Verknuepfung..." -ForegroundColor Yellow
             $WshShell = New-Object -ComObject WScript.Shell
             $Shortcut = $WshShell.CreateShortcut("$env:USERPROFILE\Desktop\OPSI PackForge.lnk")
-            $Shortcut.TargetPath = "$installPath\python\python.exe"
-            $Shortcut.Arguments = "`"$appPath\opsi_packforge.py`""
+            $Shortcut.TargetPath = "$appPath\opsi_packforge.bat"
             $Shortcut.WorkingDirectory = $appPath
             $Shortcut.Description = "OPSI PackForge"
+            $Shortcut.IconLocation = "cmd.exe"
             $Shortcut.Save()
             Write-Host "OK - Desktop-Verknuepfung erstellt" -ForegroundColor Green
             Write-Host ""
@@ -137,7 +171,13 @@ root.mainloop()
             Write-Host ""
             Write-Host "Starten mit:" -ForegroundColor Yellow
             Write-Host "- Desktop-Verknuepfung 'OPSI PackForge'" -ForegroundColor White
-            Write-Host "- Oder: $installPath\python\python.exe $appPath\opsi_packforge.py" -ForegroundColor White
+            Write-Host "- Oder direkt: $appPath\opsi_packforge.bat" -ForegroundColor White
+            Write-Host ""
+            
+            $startNow = Read-Host "Moechten Sie OPSI PackForge jetzt starten? (J/N)"
+            if ($startNow -eq "J" -or $startNow -eq "j") {
+                Start-Process "$appPath\opsi_packforge.bat"
+            }
             
         } catch {
             Write-Host "FEHLER: $_" -ForegroundColor Red
