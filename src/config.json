@@ -1,9 +1,0 @@
-{
-    "opsi_server": "opsi.schule.local",
-    "default_vendor": "schule",
-    "default_priority": "0",
-    "default_architecture": "x64",
-    "output_dir": "C:\\OPSI-Pakete",
-    "templates_dir": "templates",
-    "version": "1.0.0"
-}
