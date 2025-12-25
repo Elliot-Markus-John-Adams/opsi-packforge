@@ -217,7 +217,9 @@ try {
     
     Write-Host ""
     Write-Host "Installation beendet." -ForegroundColor Green
-    Read-Host "Drücken Sie Enter zum Schließen"
+    Write-Host ""
+    Write-Host "Drücken Sie Enter zum Schließen" -ForegroundColor Yellow
+    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
     
 } catch {
     Write-Host ""
