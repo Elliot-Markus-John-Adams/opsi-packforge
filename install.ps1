@@ -99,6 +99,7 @@ echo.
 set /p pkgid="Paket-ID (z.B. firefox): "
 set /p pkgname="Paket-Name: "
 set /p pkgversion="Version (z.B. 1.0.0): "
+if "%pkgversion%"=="" set pkgversion=1.0.0
 set /p setupfile="Setup-Datei (Pfad oder Enter fuer spaeter): "
 set /p silentparam="Silent-Parameter (z.B. /S oder /quiet): "
 set /p output="Ausgabe-Ordner (Enter fuer Desktop): "
@@ -197,46 +198,54 @@ echo.
 echo --- OPSI-SERVER VERBINDUNG ---
 echo.
 set /p connect="Moechten Sie sich mit dem OPSI-Server verbinden? (J/N): "
-if /i "%connect%"=="J" (
+if /i "%connect%"=="J" goto connect_server
+echo.
+echo Paket wurde lokal erstellt in: %pkgdir%
+goto end_create
+
+:connect_server
+echo.
+set /p opsiserver="OPSI-Server IP/Hostname (z.B. 10.1.0.1): "
+set /p opsiuser="SSH-Benutzer (meist root): "
+
+echo.
+echo Teste Verbindung zum OPSI-Server %opsiserver%...
+ping -n 1 %opsiserver% >nul 2>&1
+if errorlevel 1 (
+    echo [FEHLER] Server %opsiserver% nicht erreichbar!
     echo.
-    set /p opsiserver="OPSI-Server IP/Hostname (z.B. 10.1.0.1): "
-    set /p opsiuser="SSH-Benutzer (meist root): "
+    echo Pruefen Sie:
+    echo - IP-Adresse/Hostname
+    echo - Netzwerkverbindung
+    echo - Firewall-Einstellungen
+) else (
+    echo [OK] Server %opsiserver% ist erreichbar
+    echo.
+    echo Verbinde mit SSH...
+    echo.
+    
+    REM Zeige vorhandene OPSI-Pakete auf dem Server
+    echo Zeige /home/opsiproducts/ Verzeichnis:
+    echo ----------------------------------------
+    ssh %opsiuser%@%opsiserver% "ls -la /home/opsiproducts/ 2>/dev/null | head -20"
     
     echo.
-    echo Teste Verbindung zum OPSI-Server...
-    ping -n 1 %opsiserver% >nul 2>&1
-    if errorlevel 1 (
-        echo [FEHLER] Server %opsiserver% nicht erreichbar!
-    ) else (
-        echo [OK] Server ist erreichbar
-        echo.
-        echo Verbinde mit SSH...
-        echo.
-        
-        REM Zeige vorhandene OPSI-Pakete auf dem Server
-        echo Zeige /home/opsiproducts/ Verzeichnis:
-        echo ----------------------------------------
-        ssh %opsiuser%@%opsiserver% "ls -la /home/opsiproducts/ 2>/dev/null | head -20"
-        
-        echo.
-        echo ----------------------------------------
-        echo Lokales Paket wurde erstellt in:
-        echo %pkgdir%
-        echo.
-        echo Inhalt des lokalen Pakets:
-        dir /B "%pkgdir%\OPSI"
-        dir /B "%pkgdir%\CLIENT_DATA"
-        echo.
-        echo Sie koennen das Paket spaeter manuell deployen mit:
-        echo   scp -r "%pkgdir%" %opsiuser%@%opsiserver%:/home/opsiproducts/
-        echo   ssh %opsiuser%@%opsiserver%
-        echo   cd /home/opsiproducts
-        echo   opsi-makepackage %pkgid%_%pkgversion%
-    )
-) else (
+    echo ----------------------------------------
+    echo Lokales Paket wurde erstellt in:
+    echo %pkgdir%
     echo.
-    echo Paket wurde lokal erstellt in: %pkgdir%
+    echo Inhalt des lokalen Pakets:
+    dir /B "%pkgdir%\OPSI"
+    dir /B "%pkgdir%\CLIENT_DATA"
+    echo.
+    echo Sie koennen das Paket spaeter deployen mit:
+    echo   scp -r "%pkgdir%" %opsiuser%@%opsiserver%:/home/opsiproducts/
+    echo   ssh %opsiuser%@%opsiserver%
+    echo   cd /home/opsiproducts
+    echo   opsi-makepackage %pkgid%_%pkgversion%
 )
+
+:end_create
 echo.
 pause
 goto menu
