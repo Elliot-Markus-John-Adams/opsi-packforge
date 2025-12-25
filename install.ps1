@@ -194,15 +194,49 @@ echo.
 echo Paket-Verzeichnis:
 echo %pkgdir%
 echo.
-echo --- NAECHSTE SCHRITTE ---
+echo --- OPSI-SERVER VERBINDUNG ---
 echo.
-echo 1. Falls noch nicht geschehen: Setup-Datei nach CLIENT_DATA kopieren
-echo 2. Paket-Ordner auf OPSI-Server kopieren (z.B. /home/opsiproducts/)
-echo 3. Auf OPSI-Server ausfuehren:
-echo    opsi-makepackage %pkgid%_%pkgversion%
-echo    opsi-package-manager -i %pkgid%_%pkgversion%.opsi
-echo.
-echo Das Paket ist dann im OPSI-Configed verfuegbar!
+set /p connect="Moechten Sie sich mit dem OPSI-Server verbinden? (J/N): "
+if /i "%connect%"=="J" (
+    echo.
+    set /p opsiserver="OPSI-Server IP/Hostname (z.B. 10.1.0.1): "
+    set /p opsiuser="SSH-Benutzer (meist root): "
+    
+    echo.
+    echo Teste Verbindung zum OPSI-Server...
+    ping -n 1 %opsiserver% >nul 2>&1
+    if errorlevel 1 (
+        echo [FEHLER] Server %opsiserver% nicht erreichbar!
+    ) else (
+        echo [OK] Server ist erreichbar
+        echo.
+        echo Verbinde mit SSH...
+        echo.
+        
+        REM Zeige vorhandene OPSI-Pakete auf dem Server
+        echo Zeige /home/opsiproducts/ Verzeichnis:
+        echo ----------------------------------------
+        ssh %opsiuser%@%opsiserver% "ls -la /home/opsiproducts/ 2>/dev/null | head -20"
+        
+        echo.
+        echo ----------------------------------------
+        echo Lokales Paket wurde erstellt in:
+        echo %pkgdir%
+        echo.
+        echo Inhalt des lokalen Pakets:
+        dir /B "%pkgdir%\OPSI"
+        dir /B "%pkgdir%\CLIENT_DATA"
+        echo.
+        echo Sie koennen das Paket spaeter manuell deployen mit:
+        echo   scp -r "%pkgdir%" %opsiuser%@%opsiserver%:/home/opsiproducts/
+        echo   ssh %opsiuser%@%opsiserver%
+        echo   cd /home/opsiproducts
+        echo   opsi-makepackage %pkgid%_%pkgversion%
+    )
+) else (
+    echo.
+    echo Paket wurde lokal erstellt in: %pkgdir%
+)
 echo.
 pause
 goto menu
