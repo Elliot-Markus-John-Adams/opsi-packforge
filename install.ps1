@@ -211,11 +211,16 @@ try {
     Write-Host ""
     
     # Frage ob die Anwendung gestartet werden soll
+    Write-Host ""
     $response = Read-Host "Möchten Sie OPSI PackForge jetzt starten? (J/N)"
     if ($response -eq 'J' -or $response -eq 'j') {
         Write-Host "[INFO] Starte OPSI PackForge..." -ForegroundColor Green
         Start-Process -FilePath "$PythonDir\pythonw.exe" -ArgumentList "`"$AppDir\opsi_packforge.py`"" -WorkingDirectory $AppDir
     }
+    
+    Write-Host ""
+    Write-Host "Installation beendet." -ForegroundColor Green
+    Read-Host "Drücken Sie Enter zum Schließen"
     
 } catch {
     Write-Host ""
