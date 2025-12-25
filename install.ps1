@@ -207,6 +207,7 @@ goto end_create
 echo.
 set /p opsiserver="OPSI-Server IP/Hostname (z.B. 10.1.0.1): "
 set /p opsiuser="SSH-Benutzer (meist root): "
+if "%opsiuser%"=="" set opsiuser=root
 
 echo.
 echo Teste Verbindung zum OPSI-Server %opsiserver%...
@@ -221,13 +222,18 @@ if errorlevel 1 (
 ) else (
     echo [OK] Server %opsiserver% ist erreichbar
     echo.
-    echo Verbinde mit SSH...
+    echo Verbinde mit SSH als %opsiuser%@%opsiserver%...
     echo.
     
     REM Zeige vorhandene OPSI-Pakete auf dem Server
-    echo Zeige /home/opsiproducts/ Verzeichnis:
+    echo OPSI Workbench Verzeichnis:
     echo ----------------------------------------
-    ssh %opsiuser%@%opsiserver% "ls -la /home/opsiproducts/ 2>/dev/null | head -20"
+    ssh %opsiuser%@%opsiserver% "ls -la /var/lib/opsi/workbench/ 2>/dev/null | head -10"
+    
+    echo.
+    echo OPSI Depot Verzeichnis:
+    echo ----------------------------------------
+    ssh %opsiuser%@%opsiserver% "ls -la /var/lib/opsi/depot/ 2>/dev/null | head -10"
     
     echo.
     echo ----------------------------------------
@@ -238,11 +244,18 @@ if errorlevel 1 (
     dir /B "%pkgdir%\OPSI"
     dir /B "%pkgdir%\CLIENT_DATA"
     echo.
-    echo Sie koennen das Paket spaeter deployen mit:
-    echo   scp -r "%pkgdir%" %opsiuser%@%opsiserver%:/home/opsiproducts/
-    echo   ssh %opsiuser%@%opsiserver%
-    echo   cd /home/opsiproducts
-    echo   opsi-makepackage %pkgid%_%pkgversion%
+    echo Deployment-Befehle fuer OPSI-Server:
+    echo ----------------------------------------
+    echo 1. Paket auf Server kopieren:
+    echo    scp -r "%pkgdir%" %opsiuser%@%opsiserver%:/var/lib/opsi/workbench/
+    echo.
+    echo 2. Auf Server einloggen:
+    echo    ssh %opsiuser%@%opsiserver%
+    echo.
+    echo 3. Paket bauen und installieren:
+    echo    cd /var/lib/opsi/workbench
+    echo    opsi-makepackage %pkgid%_%pkgversion%
+    echo    opsi-package-manager -i %pkgid%_%pkgversion%.opsi
 )
 
 :end_create
