@@ -156,14 +156,24 @@ goto menu
             
             # Schritt 5
             Write-Host "Schritt 5: Erstelle Desktop-Verknuepfung..." -ForegroundColor Yellow
-            $WshShell = New-Object -ComObject WScript.Shell
-            $Shortcut = $WshShell.CreateShortcut("$env:USERPROFILE\Desktop\OPSI PackForge.lnk")
-            $Shortcut.TargetPath = "$appPath\opsi_packforge.bat"
-            $Shortcut.WorkingDirectory = $appPath
-            $Shortcut.Description = "OPSI PackForge"
-            $Shortcut.IconLocation = "cmd.exe"
-            $Shortcut.Save()
-            Write-Host "OK - Desktop-Verknuepfung erstellt" -ForegroundColor Green
+            try {
+                $desktopPath = [Environment]::GetFolderPath("Desktop")
+                if (-not $desktopPath) {
+                    $desktopPath = "$env:USERPROFILE\Desktop"
+                }
+                
+                $WshShell = New-Object -ComObject WScript.Shell
+                $Shortcut = $WshShell.CreateShortcut("$desktopPath\OPSI PackForge.lnk")
+                $Shortcut.TargetPath = "$appPath\opsi_packforge.bat"
+                $Shortcut.WorkingDirectory = $appPath
+                $Shortcut.Description = "OPSI PackForge"
+                $Shortcut.Save()
+                Write-Host "OK - Desktop-Verknuepfung erstellt" -ForegroundColor Green
+            } catch {
+                Write-Host "WARNUNG: Desktop-Verknuepfung konnte nicht erstellt werden" -ForegroundColor Yellow
+                Write-Host "         Starten Sie die Anwendung manuell:" -ForegroundColor Yellow
+                Write-Host "         $appPath\opsi_packforge.bat" -ForegroundColor Cyan
+            }
             Write-Host ""
             
             Write-Host "Installation abgeschlossen!" -ForegroundColor Green
