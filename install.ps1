@@ -70,21 +70,38 @@ switch ($choice) {
             # Erstelle ein einfaches Batch-Script als GUI-Alternative
             $batchScript = @'
 @echo off
-title OPSI PackForge v1.0
-color 0A
+title OPSI PackForge v1.0 - paedML Linux Tool
+color 0B
+mode con: cols=80 lines=40
 
 :menu
 cls
 echo.
-echo =====================================
-echo       OPSI PackForge v1.0
-echo =====================================
+echo    [36m╔═══════════════════════════════════════════════════════════════╗[0m
+echo    [36m║                                                               ║[0m
+echo    [36m║[0m     [96m█████╗ ██████╗ ███████╗██╗[0m  [93m██████╗  █████╗  ██████╗[0m   [36m║[0m
+echo    [36m║[0m    [96m██╔══██╗██╔══██╗██╔════╝██║[0m  [93m██╔══██╗██╔══██╗██╔════╝[0m   [36m║[0m
+echo    [36m║[0m    [96m██║  ██║██████╔╝███████╗██║[0m  [93m██████╔╝███████║██║[0m        [36m║[0m
+echo    [36m║[0m    [96m██║  ██║██╔═══╝ ╚════██║██║[0m  [93m██╔═══╝ ██╔══██║██║[0m        [36m║[0m
+echo    [36m║[0m    [96m╚█████╔╝██║     ███████║██║[0m  [93m██║     ██║  ██║╚██████╗[0m   [36m║[0m
+echo    [36m║[0m     [96m╚════╝ ╚═╝     ╚══════╝╚═╝[0m  [93m╚═╝     ╚═╝  ╚═╝ ╚═════╝[0m   [36m║[0m
+echo    [36m║                                                               ║[0m
+echo    [36m║[0m              [95mPackForge[0m - [32mTool fuer paedML Linux[0m              [36m║[0m
+echo    [36m╚═══════════════════════════════════════════════════════════════╝[0m
 echo.
-echo [1] Neues Paket erstellen
-echo [2] Hilfe
-echo [3] Beenden
+echo                        [92m╔════════════════════╗[0m
+echo                        [92m║[0m  [97mHAUPTMENUE[0m        [92m║[0m
+echo                        [92m╚════════════════════╝[0m
 echo.
-set /p choice="Ihre Wahl: "
+echo            [33m[[0m[36m1[0m[33m][0m [97m📦 Neues OPSI-Paket erstellen[0m
+echo.
+echo            [33m[[0m[36m2[0m[33m][0m [97m📚 Hilfe und Dokumentation[0m
+echo.
+echo            [33m[[0m[36m3[0m[33m][0m [97m🚪 Programm beenden[0m
+echo.
+echo    [90m═══════════════════════════════════════════════════════════════[0m
+echo.
+set /p choice="    [94m▶[0m Ihre Auswahl eingeben [36m[[0m1-3[36m][0m: "
 
 if "%choice%"=="1" goto create
 if "%choice%"=="2" goto help
@@ -94,22 +111,36 @@ goto menu
 :create
 cls
 echo.
-echo === NEUES OPSI-PAKET ERSTELLEN ===
+echo    [36m╔═══════════════════════════════════════════════════════════════╗[0m
+echo    [36m║[0m            [93m✨ NEUES OPSI-PAKET ERSTELLEN ✨[0m                  [36m║[0m
+echo    [36m╚═══════════════════════════════════════════════════════════════╝[0m
 echo.
-set /p pkgid="Paket-ID (z.B. firefox): "
-set /p pkgname="Paket-Name: "
-set /p pkgversion="Version (z.B. 1.0.0): "
+echo    [32mBitte geben Sie die Paket-Informationen ein:[0m
+echo    [90m───────────────────────────────────────────[0m
+echo.
+set /p pkgid="    [94m▶[0m Paket-ID [90m(z.B. firefox)[0m: "
+echo.
+set /p pkgname="    [94m▶[0m Paket-Name [90m(z.B. Mozilla Firefox)[0m: "
+echo.
+set /p pkgversion="    [94m▶[0m Version [90m(Standard: 1.0.0)[0m: "
 if "%pkgversion%"=="" set pkgversion=1.0.0
-set /p setupfile="Setup-Datei (Pfad oder Enter fuer spaeter): "
-set /p silentparam="Silent-Parameter (z.B. /S oder /quiet): "
-set /p output="Ausgabe-Ordner (Enter fuer Desktop): "
+echo.
+echo    [33m⚙️  Erweiterte Optionen (optional):[0m
+echo    [90m───────────────────────────────────────────[0m
+echo.
+set /p setupfile="    [94m▶[0m Setup-Datei [90m(Pfad oder Enter)[0m: "
+echo.
+set /p silentparam="    [94m▶[0m Silent-Parameter [90m(/S, /quiet)[0m: "
+echo.
+set /p output="    [94m▶[0m Ausgabe-Ordner [90m(Enter = Desktop)[0m: "
 
 if "%output%"=="" set output=%USERPROFILE%\Desktop
 
 set pkgdir=%output%\%pkgid%_%pkgversion%
 
 echo.
-echo Erstelle Paket-Struktur...
+echo    [93m⏳ Erstelle Paket-Struktur...[0m
+echo.
 mkdir "%pkgdir%\OPSI" 2>nul
 mkdir "%pkgdir%\CLIENT_DATA" 2>nul
 
@@ -188,12 +219,15 @@ echo [Actions] >> "%pkgdir%\CLIENT_DATA\uninstall.opsiscript"
 echo Message "Uninstalling %pkgname%" >> "%pkgdir%\CLIENT_DATA\uninstall.opsiscript"
 
 echo.
-echo ===================================
-echo PAKET ERFOLGREICH ERSTELLT!
-echo ===================================
+echo    [92m╔═══════════════════════════════════════════════════════════════╗[0m
+echo    [92m║[0m           [97m✅ PAKET ERFOLGREICH ERSTELLT! ✅[0m                 [92m║[0m
+echo    [92m╚═══════════════════════════════════════════════════════════════╝[0m
 echo.
-echo Paket-Verzeichnis:
-echo %pkgdir%
+echo    [32m📁 Paket-Verzeichnis:[0m
+echo    [96m%pkgdir%[0m
+echo.
+echo    [93m📂 Oeffne Explorer-Fenster...[0m
+start explorer "%pkgdir%"
 echo.
 echo --- OPSI-SERVER VERBINDUNG ---
 echo.
@@ -229,12 +263,16 @@ if errorlevel 1 (
     REM Zeige vorhandene OPSI-Pakete auf dem Server
     echo OPSI Workbench Verzeichnis:
     echo ----------------------------------------
-    ssh %opsiuser%@%opsiserver% "ls -la /var/lib/opsi/workbench/ 2>/dev/null | head -10"
+    ssh %opsiuser%@%opsiserver% "ls -la /var/lib/opsi/workbench/ 2>/dev/null | head -10" 2>nul
+    if errorlevel 1 (
+        echo [WARNUNG] SSH-Verbindung fehlgeschlagen
+        echo Installieren Sie SSH mit: winget install OpenSSH.Client
+    )
     
     echo.
     echo OPSI Depot Verzeichnis:
     echo ----------------------------------------
-    ssh %opsiuser%@%opsiserver% "ls -la /var/lib/opsi/depot/ 2>/dev/null | head -10"
+    ssh %opsiuser%@%opsiserver% "ls -la /var/lib/opsi/depot/ 2>/dev/null | head -10" 2>nul
     
     echo.
     echo ----------------------------------------
@@ -270,9 +308,13 @@ if errorlevel 1 (
         scp -r "%pkgdir%" %opsiuser%@%opsiserver%:/var/lib/opsi/workbench/
         if errorlevel 1 (
             echo [FEHLER] Kopieren fehlgeschlagen!
-            goto deployment_end
+            echo Pruefen Sie:
+            echo - SSH/SCP installiert? (winget install OpenSSH.Client)
+            echo - Server erreichbar?
+            echo - Passwort korrekt?
+        ) else (
+            echo [OK] Paket kopiert
         )
-        echo [OK] Paket kopiert
         echo.
         
         echo Schritt 2: Baue OPSI-Paket auf Server...
@@ -307,8 +349,6 @@ if errorlevel 1 (
         echo - Produktkonfiguration
         echo - %pkgid% suchen
         echo.
-        
-        :deployment_end
     ) else (
         echo.
         echo Manuelles Deployment spaeter moeglich mit obigen Befehlen.
@@ -323,14 +363,36 @@ goto menu
 :help
 cls
 echo.
-echo === HILFE ===
+echo    [36m╔═══════════════════════════════════════════════════════════════╗[0m
+echo    [36m║[0m                 [93m📚 HILFE UND DOKUMENTATION 📚[0m               [36m║[0m
+echo    [36m╚═══════════════════════════════════════════════════════════════╝[0m
 echo.
-echo OPSI PackForge erstellt OPSI-Paket-Strukturen
-echo fuer die paedML Linux Umgebung.
+echo    [97m▶ Was ist OPSI PackForge?[0m
+echo    [90m───────────────────────────────────────────[0m
+echo    Ein Tool zur einfachen Erstellung von OPSI-Paketen
+echo    speziell fuer paedML Linux Umgebungen.
 echo.
-echo Erstellt:
-echo - OPSI/control Datei
-echo - CLIENT_DATA/setup.opsiscript
+echo    [97m▶ Hauptfunktionen:[0m
+echo    [90m───────────────────────────────────────────[0m
+echo    [32m✓[0m Erstellt OPSI-konforme Paketstruktur
+echo    [32m✓[0m Generiert control und opsiscript Dateien
+echo    [32m✓[0m SSH-Verbindung zum OPSI-Server
+echo    [32m✓[0m Automatisches Deployment moeglich
+echo.
+echo    [97m▶ Erstellte Dateien:[0m
+echo    [90m───────────────────────────────────────────[0m
+echo    [36mOPSI/control[0m         - Paket-Metadaten
+echo    [36mCLIENT_DATA/[0m
+echo      [36m├─ setup.opsiscript[0m    - Installations-Script
+echo      [36m└─ uninstall.opsiscript[0m - Deinstallations-Script
+echo.
+echo    [97m▶ OPSI-Server:[0m
+echo    [90m───────────────────────────────────────────[0m
+echo    Standard: [93m10.1.0.2[0m ([93mbackup.paedml-linux.lokal[0m)
+echo.
+echo    [97m▶ Support:[0m
+echo    [90m───────────────────────────────────────────[0m
+echo    GitHub: [94mhttps://github.com/Elliot-Markus-John-Adams/opsi-packforge[0m
 echo.
 pause
 goto menu
