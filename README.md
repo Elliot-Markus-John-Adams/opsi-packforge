@@ -24,7 +24,7 @@ In PowerShell (Admin-VM) ausführen:
 - Windows 10/11 (paedML Admin-VM)
 - PowerShell 5.1+
 - SSH-Client (optional, für Server-Verbindung)
-- Netzwerkzugriff zum OPSI-Server (10.1.0.2)
+- Netzwerkzugriff zum OPSI-Server (10.1.0.2 / backup.paedml-linux.lokal)
 
 ## 🎯 Verwendung
 
@@ -42,7 +42,7 @@ Nach der Installation finden Sie "OPSI PackForge" auf dem Desktop.
 ```
 
 ### 3. OPSI-Server Verbindung
-Das Tool kann sich direkt mit dem OPSI-Server verbinden und zeigt:
+Das Tool verbindet sich standardmäßig mit dem OPSI-Server (10.1.0.2 / backup.paedml-linux.lokal) und zeigt:
 - Vorhandene Pakete in `/var/lib/opsi/workbench/`
 - Installierte Pakete in `/var/lib/opsi/depot/`
 

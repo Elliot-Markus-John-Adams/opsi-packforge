@@ -205,7 +205,8 @@ goto end_create
 
 :connect_server
 echo.
-set /p opsiserver="OPSI-Server IP/Hostname (z.B. 10.1.0.1): "
+set /p opsiserver="OPSI-Server IP/Hostname (Default: 10.1.0.2): "
+if "%opsiserver%"=="" set opsiserver=10.1.0.2
 set /p opsiuser="SSH-Benutzer (meist root): "
 if "%opsiuser%"=="" set opsiuser=root
 
@@ -244,7 +245,7 @@ if errorlevel 1 (
     dir /B "%pkgdir%\OPSI"
     dir /B "%pkgdir%\CLIENT_DATA"
     echo.
-    echo Deployment-Befehle fuer OPSI-Server:
+    echo Deployment-Befehle fuer OPSI-Server (%opsiserver%):
     echo ----------------------------------------
     echo 1. Paket auf Server kopieren:
     echo    scp -r "%pkgdir%" %opsiuser%@%opsiserver%:/var/lib/opsi/workbench/
@@ -256,6 +257,62 @@ if errorlevel 1 (
     echo    cd /var/lib/opsi/workbench
     echo    opsi-makepackage %pkgid%_%pkgversion%
     echo    opsi-package-manager -i %pkgid%_%pkgversion%.opsi
+    echo.
+    echo ----------------------------------------
+    echo.
+    set /p autodeploy="Moechten Sie das Paket JETZT automatisch deployen? (J/N): "
+    if /i "%autodeploy%"=="J" (
+        echo.
+        echo [DEPLOYMENT STARTET]
+        echo.
+        
+        echo Schritt 1: Kopiere Paket auf Server...
+        scp -r "%pkgdir%" %opsiuser%@%opsiserver%:/var/lib/opsi/workbench/
+        if errorlevel 1 (
+            echo [FEHLER] Kopieren fehlgeschlagen!
+            goto deployment_end
+        )
+        echo [OK] Paket kopiert
+        echo.
+        
+        echo Schritt 2: Baue OPSI-Paket auf Server...
+        ssh %opsiuser%@%opsiserver% "cd /var/lib/opsi/workbench && opsi-makepackage %pkgid%_%pkgversion%"
+        if errorlevel 1 (
+            echo [WARNUNG] Paket-Build moeglicherweise fehlgeschlagen
+        ) else (
+            echo [OK] OPSI-Paket gebaut
+        )
+        echo.
+        
+        echo Schritt 3: Installiere Paket in OPSI...
+        ssh %opsiuser%@%opsiserver% "opsi-package-manager -i /var/lib/opsi/workbench/%pkgid%_%pkgversion%.opsi"
+        if errorlevel 1 (
+            echo [WARNUNG] Installation moeglicherweise fehlgeschlagen
+        ) else (
+            echo [OK] Paket in OPSI installiert
+        )
+        echo.
+        
+        echo Schritt 4: Zeige installierte Pakete...
+        ssh %opsiuser%@%opsiserver% "opsi-package-manager -l | grep %pkgid%"
+        echo.
+        
+        echo ===================================
+        echo DEPLOYMENT ABGESCHLOSSEN!
+        echo ===================================
+        echo.
+        echo Das Paket sollte jetzt im OPSI-Configed verfuegbar sein.
+        echo Sie koennen es Clients zuweisen unter:
+        echo - OPSI Configed starten
+        echo - Produktkonfiguration
+        echo - %pkgid% suchen
+        echo.
+        
+        :deployment_end
+    ) else (
+        echo.
+        echo Manuelles Deployment spaeter moeglich mit obigen Befehlen.
+    )
 )
 
 :end_create
