@@ -201,12 +201,13 @@ echo.
 echo --- OPSI-SERVER VERBINDUNG ---
 echo.
 set /p connect="Moechten Sie sich mit dem OPSI-Server verbinden? (J/N): "
-if /i "%connect%"=="J" goto connect_server
-echo.
-echo Paket wurde lokal erstellt in: %pkgdir%
-goto end_create
+if /i NOT "%connect%"=="J" (
+    echo.
+    echo Paket wurde lokal erstellt in: %pkgdir%
+    pause
+    goto menu
+)
 
-:connect_server
 echo.
 set /p opsiserver="OPSI-Server IP/Hostname (Default: 10.1.0.2): "
 if "%opsiserver%"=="" set opsiserver=10.1.0.2
@@ -223,52 +224,55 @@ if errorlevel 1 (
     echo - IP-Adresse/Hostname
     echo - Netzwerkverbindung
     echo - Firewall-Einstellungen
-) else (
-    echo [OK] Server %opsiserver% ist erreichbar
-    echo.
-    echo Verbinde mit SSH als %opsiuser%@%opsiserver%...
-    echo.
+    pause
+    goto menu
+)
+
+echo [OK] Server %opsiserver% ist erreichbar
+echo.
+echo Verbinde mit SSH als %opsiuser%@%opsiserver%...
+echo.
+
+REM Zeige vorhandene OPSI-Pakete auf dem Server
+echo OPSI Workbench Verzeichnis:
+echo ----------------------------------------
+ssh %opsiuser%@%opsiserver% "ls -la /var/lib/opsi/workbench/ 2>/dev/null | head -10" 2>nul
+if errorlevel 1 (
+    echo [WARNUNG] SSH-Verbindung fehlgeschlagen
+    echo Installieren Sie SSH mit: winget install OpenSSH.Client
+)
+
+echo.
+echo OPSI Depot Verzeichnis:
+echo ----------------------------------------
+ssh %opsiuser%@%opsiserver% "ls -la /var/lib/opsi/depot/ 2>/dev/null | head -10" 2>nul
     
-    REM Zeige vorhandene OPSI-Pakete auf dem Server
-    echo OPSI Workbench Verzeichnis:
-    echo ----------------------------------------
-    ssh %opsiuser%@%opsiserver% "ls -la /var/lib/opsi/workbench/ 2>/dev/null | head -10" 2>nul
-    if errorlevel 1 (
-        echo [WARNUNG] SSH-Verbindung fehlgeschlagen
-        echo Installieren Sie SSH mit: winget install OpenSSH.Client
-    )
-    
-    echo.
-    echo OPSI Depot Verzeichnis:
-    echo ----------------------------------------
-    ssh %opsiuser%@%opsiserver% "ls -la /var/lib/opsi/depot/ 2>/dev/null | head -10" 2>nul
-    
-    echo.
-    echo ----------------------------------------
-    echo Lokales Paket wurde erstellt in:
-    echo %pkgdir%
-    echo.
-    echo Inhalt des lokalen Pakets:
-    dir /B "%pkgdir%\OPSI"
-    dir /B "%pkgdir%\CLIENT_DATA"
-    echo.
-    echo Deployment-Befehle fuer OPSI-Server (%opsiserver%):
-    echo ----------------------------------------
-    echo 1. Paket auf Server kopieren:
-    echo    scp -r "%pkgdir%" %opsiuser%@%opsiserver%:/var/lib/opsi/workbench/
-    echo.
-    echo 2. Auf Server einloggen:
-    echo    ssh %opsiuser%@%opsiserver%
-    echo.
-    echo 3. Paket bauen und installieren:
-    echo    cd /var/lib/opsi/workbench
-    echo    opsi-makepackage %pkgid%_%pkgversion%
-    echo    opsi-package-manager -i %pkgid%_%pkgversion%.opsi
-    echo.
-    echo ----------------------------------------
-    echo.
-    set /p autodeploy="Moechten Sie das Paket JETZT automatisch deployen? (J/N): "
-    if /i "%autodeploy%"=="J" (
+echo.
+echo ----------------------------------------
+echo Lokales Paket wurde erstellt in:
+echo %pkgdir%
+echo.
+echo Inhalt des lokalen Pakets:
+dir /B "%pkgdir%\OPSI"
+dir /B "%pkgdir%\CLIENT_DATA"
+echo.
+echo Deployment-Befehle fuer OPSI-Server (%opsiserver%):
+echo ----------------------------------------
+echo 1. Paket auf Server kopieren:
+echo    scp -r "%pkgdir%" %opsiuser%@%opsiserver%:/var/lib/opsi/workbench/
+echo.
+echo 2. Auf Server einloggen:
+echo    ssh %opsiuser%@%opsiserver%
+echo.
+echo 3. Paket bauen und installieren:
+echo    cd /var/lib/opsi/workbench
+echo    opsi-makepackage %pkgid%_%pkgversion%
+echo    opsi-package-manager -i %pkgid%_%pkgversion%.opsi
+echo.
+echo ----------------------------------------
+echo.
+set /p autodeploy="Moechten Sie das Paket JETZT automatisch deployen? (J/N): "
+if /i "%autodeploy%"=="J" (
         echo.
         echo [DEPLOYMENT STARTET]
         echo.
@@ -318,13 +322,11 @@ if errorlevel 1 (
         echo - Produktkonfiguration
         echo - %pkgid% suchen
         echo.
-    ) else (
-        echo.
-        echo Manuelles Deployment spaeter moeglich mit obigen Befehlen.
-    )
+) else (
+    echo.
+    echo Manuelles Deployment spaeter moeglich mit obigen Befehlen.
 )
 
-:end_create
 echo.
 pause
 goto menu
