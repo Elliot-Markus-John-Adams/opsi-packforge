@@ -247,7 +247,7 @@ echo [AUTOMATISCHES DEPLOYMENT STARTET]
 echo ==================================
 echo.
 
-echo Schritt 1/3: Kopiere Paket auf OPSI-Server...
+echo Schritt 1/4: Kopiere Paket auf OPSI-Server...
 echo.
 scp -r "%pkgdir%" %opsiuser%@%opsiserver%:/var/lib/opsi/workbench/
 if errorlevel 1 (
@@ -259,9 +259,21 @@ if errorlevel 1 (
 echo [OK] Paket auf Server kopiert
 echo.
 
-echo Schritt 2/3: Baue und installiere OPSI-Paket...
-echo Bitte EINMAL Passwort eingeben:
-ssh %opsiuser%@%opsiserver% "cd /var/lib/opsi/workbench && opsi-makepackage %pkgid%_%pkgversion% && opsi-package-manager -i /var/lib/opsi/workbench/%pkgid%_%pkgversion%-1.opsi && echo && echo 'Installierte Pakete:' && opsi-package-manager -l | grep -i %pkgid%"
+echo Schritt 2/4: Baue OPSI-Paket...
+ssh %opsiuser%@%opsiserver% "cd /var/lib/opsi/workbench && opsi-makepackage %pkgid%_%pkgversion%"
+echo.
+
+echo Schritt 3/4: Installiere in OPSI...
+ssh %opsiuser%@%opsiserver% "opsi-package-manager -q -i /var/lib/opsi/workbench/%pkgid%_%pkgversion%-1.opsi"
+if errorlevel 1 (
+    echo [WARNUNG] Installation moeglicherweise fehlgeschlagen
+) else (
+    echo [OK] Paket installiert
+)
+echo.
+
+echo Schritt 4/4: Pruefe Installation...
+ssh %opsiuser%@%opsiserver% "opsi-package-manager -l | grep -i %pkgid%"
 echo.
 
 echo ==================================
