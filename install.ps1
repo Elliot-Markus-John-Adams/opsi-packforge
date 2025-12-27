@@ -41,27 +41,28 @@ switch ($choice) {
         Write-Host "OK - Verzeichnis erstellt: $installPath" -ForegroundColor Green
         Write-Host ""
         
-        # Schritt 2
-        Write-Host "Schritt 2: Lade Python herunter..." -ForegroundColor Yellow
-        Write-Host "Dies kann einige Minuten dauern..." -ForegroundColor Gray
-        
-        try {
-            $pythonUrl = "https://www.python.org/ftp/python/3.11.9/python-3.11.9-embed-amd64.zip"
-            $pythonZip = "$env:TEMP\python.zip"
+        # Schritt 2 - Python nur wenn noetig
+        if (-not (Test-Path "$installPath\python\python.exe")) {
+            Write-Host "Schritt 2: Lade Python herunter..." -ForegroundColor Yellow
+            Write-Host "Dies kann einige Minuten dauern..." -ForegroundColor Gray
             
-            # Proxy-Support
-            [System.Net.WebRequest]::DefaultWebProxy.Credentials = [System.Net.CredentialCache]::DefaultCredentials
-            $client = New-Object System.Net.WebClient
-            $client.Proxy.Credentials = [System.Net.CredentialCache]::DefaultNetworkCredentials
-            $client.DownloadFile($pythonUrl, $pythonZip)
-            
-            Write-Host "OK - Python heruntergeladen" -ForegroundColor Green
-            Write-Host ""
-            
-            # Schritt 3
-            Write-Host "Schritt 3: Entpacke Python..." -ForegroundColor Yellow
-            Expand-Archive -Path $pythonZip -DestinationPath "$installPath\python" -Force
-            Remove-Item $pythonZip
+            try {
+                $pythonUrl = "https://www.python.org/ftp/python/3.11.9/python-3.11.9-embed-amd64.zip"
+                $pythonZip = "$env:TEMP\python.zip"
+                
+                # Proxy-Support
+                [System.Net.WebRequest]::DefaultWebProxy.Credentials = [System.Net.CredentialCache]::DefaultCredentials
+                $client = New-Object System.Net.WebClient
+                $client.Proxy.Credentials = [System.Net.CredentialCache]::DefaultNetworkCredentials
+                $client.DownloadFile($pythonUrl, $pythonZip)
+                
+                Write-Host "OK - Python heruntergeladen" -ForegroundColor Green
+                Write-Host ""
+                
+                # Schritt 3
+                Write-Host "Schritt 3: Entpacke Python..." -ForegroundColor Yellow
+                Expand-Archive -Path $pythonZip -DestinationPath "$installPath\python" -Force
+                Remove-Item $pythonZip
             
             # Python konfigurieren für tkinter
             $pthFile = "$installPath\python\python311._pth"
@@ -71,16 +72,24 @@ switch ($choice) {
                 Set-Content -Path $pthFile -Value $content
             }
             
-            Write-Host "OK - Python installiert" -ForegroundColor Green
+                Write-Host "OK - Python installiert" -ForegroundColor Green
+                Write-Host ""
+            } catch {
+                Write-Host "FEHLER: $_" -ForegroundColor Red
+                exit 1
+            }
+        } else {
+            Write-Host "Schritt 2-3: Python bereits vorhanden - ueberspringe Download" -ForegroundColor Green
             Write-Host ""
-            
-            # Schritt 4
-            Write-Host "Schritt 4: Erstelle OPSI PackForge..." -ForegroundColor Yellow
-            $appPath = "$installPath\app"
-            New-Item -ItemType Directory -Path $appPath -Force | Out-Null
-            
-            # Erstelle ein einfaches Batch-Script als GUI-Alternative
-            $batchScript = @'
+        }
+        
+        # Schritt 4
+        Write-Host "Schritt 4: Erstelle OPSI PackForge..." -ForegroundColor Yellow
+        $appPath = "$installPath\app"
+        New-Item -ItemType Directory -Path $appPath -Force | Out-Null
+        
+        # Erstelle ein einfaches Batch-Script als GUI-Alternative
+        $batchScript = @'
 @echo off
 title OPSI PackForge v1.0
 color 0A
@@ -321,48 +330,44 @@ echo.
 pause
 goto menu
 '@
-            
-            $batchScript | Out-File -FilePath "$appPath\opsi_packforge.bat" -Encoding ASCII
-            Write-Host "OK - Anwendung erstellt" -ForegroundColor Green
-            Write-Host ""
-            
-            # Schritt 5
-            Write-Host "Schritt 5: Erstelle Desktop-Verknuepfung..." -ForegroundColor Yellow
-            try {
-                $desktopPath = [Environment]::GetFolderPath("Desktop")
-                if (-not $desktopPath) {
-                    $desktopPath = "$env:USERPROFILE\Desktop"
-                }
-                
-                $WshShell = New-Object -ComObject WScript.Shell
-                $Shortcut = $WshShell.CreateShortcut("$desktopPath\OPSI PackForge.lnk")
-                $Shortcut.TargetPath = "$appPath\opsi_packforge.bat"
-                $Shortcut.WorkingDirectory = $appPath
-                $Shortcut.Description = "OPSI PackForge"
-                $Shortcut.Save()
-                Write-Host "OK - Desktop-Verknuepfung erstellt" -ForegroundColor Green
-            } catch {
-                Write-Host "WARNUNG: Desktop-Verknuepfung konnte nicht erstellt werden" -ForegroundColor Yellow
-                Write-Host "         Starten Sie die Anwendung manuell:" -ForegroundColor Yellow
-                Write-Host "         $appPath\opsi_packforge.bat" -ForegroundColor Cyan
-            }
-            Write-Host ""
-            
-            Write-Host "Installation abgeschlossen!" -ForegroundColor Green
-            Write-Host "Installiert in: $installPath" -ForegroundColor Cyan
-            Write-Host ""
-            Write-Host "Starten mit:" -ForegroundColor Yellow
-            Write-Host "- Desktop-Verknuepfung 'OPSI PackForge'" -ForegroundColor White
-            Write-Host "- Oder direkt: $appPath\opsi_packforge.bat" -ForegroundColor White
-            Write-Host ""
-            
-            $startNow = Read-Host "Moechten Sie OPSI PackForge jetzt starten? (J/N)"
-            if ($startNow -eq "J" -or $startNow -eq "j") {
-                Start-Process "$appPath\opsi_packforge.bat"
+        
+        $batchScript | Out-File -FilePath "$appPath\opsi_packforge.bat" -Encoding ASCII
+        Write-Host "OK - Anwendung erstellt" -ForegroundColor Green
+        Write-Host ""
+        
+        # Schritt 5
+        Write-Host "Schritt 5: Erstelle Desktop-Verknuepfung..." -ForegroundColor Yellow
+        try {
+            $desktopPath = [Environment]::GetFolderPath("Desktop")
+            if (-not $desktopPath) {
+                $desktopPath = "$env:USERPROFILE\Desktop"
             }
             
+            $WshShell = New-Object -ComObject WScript.Shell
+            $Shortcut = $WshShell.CreateShortcut("$desktopPath\OPSI PackForge.lnk")
+            $Shortcut.TargetPath = "$appPath\opsi_packforge.bat"
+            $Shortcut.WorkingDirectory = $appPath
+            $Shortcut.Description = "OPSI PackForge"
+            $Shortcut.Save()
+            Write-Host "OK - Desktop-Verknuepfung erstellt" -ForegroundColor Green
         } catch {
-            Write-Host "FEHLER: $_" -ForegroundColor Red
+            Write-Host "WARNUNG: Desktop-Verknuepfung konnte nicht erstellt werden" -ForegroundColor Yellow
+            Write-Host "         Starten Sie die Anwendung manuell:" -ForegroundColor Yellow
+            Write-Host "         $appPath\opsi_packforge.bat" -ForegroundColor Cyan
+        }
+        Write-Host ""
+        
+        Write-Host "Installation abgeschlossen!" -ForegroundColor Green
+        Write-Host "Installiert in: $installPath" -ForegroundColor Cyan
+        Write-Host ""
+        Write-Host "Starten mit:" -ForegroundColor Yellow
+        Write-Host "- Desktop-Verknuepfung 'OPSI PackForge'" -ForegroundColor White
+        Write-Host "- Oder direkt: $appPath\opsi_packforge.bat" -ForegroundColor White
+        Write-Host ""
+        
+        $startNow = Read-Host "Moechten Sie OPSI PackForge jetzt starten? (J/N)"
+        if ($startNow -eq "J" -or $startNow -eq "j") {
+            Start-Process "$appPath\opsi_packforge.bat"
         }
     }
     
