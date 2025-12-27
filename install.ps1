@@ -70,35 +70,21 @@ switch ($choice) {
             # Erstelle ein einfaches Batch-Script als GUI-Alternative
             $batchScript = @'
 @echo off
-title OPSI PackForge v1.0 - paedML Linux Tool
-color 0B
+title OPSI PackForge v1.0
+color 0A
 
 :menu
 cls
 echo.
-echo  ==================================================================
+echo =====================================
+echo       OPSI PackForge v1.0
+echo =====================================
 echo.
-echo      ####  ####   #### #####    ####   ###   #### #  # ####
-echo     #    # #   # #       #      #   # #   # #     # #  #
-echo     #    # ####   ###    #      ####  ##### #     ##   ###
-echo     #    # #         #   #      #     #   # #     # #  #
-echo      ####  #     ####  #####    #     #   #  #### #  # ####
+echo [1] Neues Paket erstellen
+echo [2] Hilfe
+echo [3] Beenden
 echo.
-echo                    Tool fuer paedML Linux
-echo  ==================================================================
-echo.
-echo                        HAUPTMENUE
-echo                    ================
-echo.
-echo                [1] Neues OPSI-Paket erstellen
-echo.
-echo                [2] Hilfe und Dokumentation
-echo.
-echo                [3] Programm beenden
-echo.
-echo  ------------------------------------------------------------------
-echo.
-set /p choice=" Ihre Auswahl (1-3): "
+set /p choice="Ihre Wahl: "
 
 if "%choice%"=="1" goto create
 if "%choice%"=="2" goto help
@@ -108,31 +94,22 @@ goto menu
 :create
 cls
 echo.
-echo  ==================================================================
-echo                   NEUES OPSI-PAKET ERSTELLEN
-echo  ==================================================================
+echo === NEUES OPSI-PAKET ERSTELLEN ===
 echo.
-echo  Bitte geben Sie die Paket-Informationen ein:
-echo  --------------------------------------------
-echo.
-set /p pkgid=" Paket-ID (z.B. firefox): "
-set /p pkgname=" Paket-Name: "
-set /p pkgversion=" Version (Standard: 1.0.0): "
+set /p pkgid="Paket-ID (z.B. firefox): "
+set /p pkgname="Paket-Name: "
+set /p pkgversion="Version (z.B. 1.0.0): "
 if "%pkgversion%"=="" set pkgversion=1.0.0
-echo.
-echo  Erweiterte Optionen (optional):
-echo  --------------------------------
-echo.
-set /p setupfile=" Setup-Datei (Pfad oder Enter): "
-set /p silentparam=" Silent-Parameter (/S, /quiet): "
-set /p output=" Ausgabe-Ordner (Enter = Desktop): "
+set /p setupfile="Setup-Datei (Pfad oder Enter fuer spaeter): "
+set /p silentparam="Silent-Parameter (z.B. /S oder /quiet): "
+set /p output="Ausgabe-Ordner (Enter fuer Desktop): "
 
 if "%output%"=="" set output=%USERPROFILE%\Desktop
 
 set pkgdir=%output%\%pkgid%_%pkgversion%
 
 echo.
-echo  Erstelle Paket-Struktur...
+echo Erstelle Paket-Struktur...
 mkdir "%pkgdir%\OPSI" 2>nul
 mkdir "%pkgdir%\CLIENT_DATA" 2>nul
 
@@ -211,14 +188,14 @@ echo [Actions] >> "%pkgdir%\CLIENT_DATA\uninstall.opsiscript"
 echo Message "Uninstalling %pkgname%" >> "%pkgdir%\CLIENT_DATA\uninstall.opsiscript"
 
 echo.
-echo  ==================================================================
-echo                 PAKET ERFOLGREICH ERSTELLT!
-echo  ==================================================================
+echo ===================================
+echo PAKET ERFOLGREICH ERSTELLT!
+echo ===================================
 echo.
-echo  Paket-Verzeichnis:
-echo  %pkgdir%
+echo Paket-Verzeichnis:
+echo %pkgdir%
 echo.
-echo  Oeffne Explorer-Fenster...
+echo Oeffne Explorer...
 start explorer "%pkgdir%"
 echo.
 echo --- OPSI-SERVER VERBINDUNG ---
@@ -355,36 +332,19 @@ goto menu
 :help
 cls
 echo.
-echo  ==================================================================
-echo                    HILFE UND DOKUMENTATION
-echo  ==================================================================
+echo === HILFE ===
 echo.
-echo  Was ist OPSI PackForge?
-echo  -----------------------
-echo  Ein Tool zur einfachen Erstellung von OPSI-Paketen
-echo  speziell fuer paedML Linux Umgebungen.
+echo OPSI PackForge erstellt OPSI-Paket-Strukturen
+echo fuer die paedML Linux Umgebung.
 echo.
-echo  Hauptfunktionen:
-echo  ----------------
-echo  - Erstellt OPSI-konforme Paketstruktur
-echo  - Generiert control und opsiscript Dateien
-echo  - SSH-Verbindung zum OPSI-Server
-echo  - Automatisches Deployment moeglich
+echo Erstellt:
+echo - OPSI/control Datei
+echo - CLIENT_DATA/setup.opsiscript
+echo - CLIENT_DATA/uninstall.opsiscript
 echo.
-echo  Erstellte Dateien:
-echo  ------------------
-echo  OPSI/control              - Paket-Metadaten
-echo  CLIENT_DATA/
-echo    - setup.opsiscript      - Installations-Script
-echo    - uninstall.opsiscript  - Deinstallations-Script
+echo OPSI-Server: 10.1.0.2 (backup.paedml-linux.lokal)
 echo.
-echo  OPSI-Server:
-echo  ------------
-echo  Standard: 10.1.0.2 (backup.paedml-linux.lokal)
-echo.
-echo  Support:
-echo  --------
-echo  https://github.com/Elliot-Markus-John-Adams/opsi-packforge
+echo GitHub: https://github.com/Elliot-Markus-John-Adams/opsi-packforge
 echo.
 pause
 goto menu
