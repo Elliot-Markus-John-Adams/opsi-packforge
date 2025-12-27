@@ -221,13 +221,63 @@ if errorlevel 1 (
 
 echo [OK] Server erreichbar
 echo.
-echo SSH-Befehle fuer manuelles Deployment:
 echo ----------------------------------------
-echo scp -r "%pkgdir%" %opsiuser%@%opsiserver%:/var/lib/opsi/workbench/
-echo ssh %opsiuser%@%opsiserver%
-echo opsi-makepackage %pkgid%_%pkgversion%
-echo opsi-package-manager -i %pkgid%_%pkgversion%.opsi
+echo Paket-Verzeichnis: %pkgdir%
+echo Ziel-Server: %opsiserver%
 echo ----------------------------------------
+echo.
+set /p readydeploy="Haben Sie alle Setup-Dateien in CLIENT_DATA kopiert? (J/N): "
+if /i NOT "%readydeploy%"=="J" (
+    echo.
+    echo Bitte kopieren Sie erst alle benoetigten Dateien nach:
+    echo %pkgdir%\CLIENT_DATA\
+    echo.
+    echo Dann fuehren Sie diese Befehle manuell aus:
+    echo ----------------------------------------
+    echo scp -r "%pkgdir%" %opsiuser%@%opsiserver%:/var/lib/opsi/workbench/
+    echo ssh %opsiuser%@%opsiserver%
+    echo opsi-makepackage %pkgid%_%pkgversion%
+    echo opsi-package-manager -i %pkgid%_%pkgversion%.opsi
+    echo ----------------------------------------
+    goto skip_ssh
+)
+
+echo.
+echo [AUTOMATISCHES DEPLOYMENT STARTET]
+echo ==================================
+echo.
+
+echo Schritt 1/4: Kopiere Paket auf OPSI-Server...
+echo Befehl: scp -r "%pkgdir%" %opsiuser%@%opsiserver%:/var/lib/opsi/workbench/
+echo.
+scp -r "%pkgdir%" %opsiuser%@%opsiserver%:/var/lib/opsi/workbench/
+if errorlevel 1 (
+    echo [FEHLER] Transfer fehlgeschlagen
+    echo Moeglicherweise fehlt SSH/SCP. Installation mit:
+    echo   winget install OpenSSH.Client
+    goto skip_ssh
+)
+echo [OK] Paket auf Server kopiert
+echo.
+
+echo Schritt 2/4: Baue OPSI-Paket...
+ssh %opsiuser%@%opsiserver% "cd /var/lib/opsi/workbench && opsi-makepackage %pkgid%_%pkgversion%"
+echo.
+
+echo Schritt 3/4: Installiere in OPSI...
+ssh %opsiuser%@%opsiserver% "opsi-package-manager -i /var/lib/opsi/workbench/%pkgid%_%pkgversion%.opsi"
+echo.
+
+echo Schritt 4/4: Pruefe Installation...
+ssh %opsiuser%@%opsiserver% "opsi-package-manager -l | grep -i %pkgid%"
+echo.
+
+echo ==================================
+echo DEPLOYMENT ABGESCHLOSSEN!
+echo ==================================
+echo.
+echo Das Paket ist jetzt im OPSI-Configed verfuegbar.
+echo Sie koennen es den Clients zuweisen.
 
 :skip_ssh
 
