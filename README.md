@@ -15,9 +15,11 @@ In PowerShell (Admin-VM) ausführen:
 
 - ✅ **Einfache Paket-Erstellung** - Interaktives Menü-System
 - ✅ **OPSI-konforme Struktur** - Erstellt control und opsiscript Dateien
-- ✅ **SSH-Integration** - Direkter Zugriff auf OPSI-Server
+- ✅ **Automatisches Deployment** - Direktes Hochladen und Installieren auf OPSI-Server
+- ✅ **SSH-Integration** - Verbindung zum OPSI-Server (10.1.0.2)
 - ✅ **Setup-Datei Support** - Automatisches Kopieren der Installer
 - ✅ **Silent-Parameter** - Unterstützung für unbeaufsichtigte Installation
+- ✅ **Explorer-Integration** - Öffnet automatisch das erstellte Paket-Verzeichnis
 
 ## 📋 Systemanforderungen
 
@@ -41,19 +43,19 @@ Nach der Installation finden Sie "OPSI PackForge" auf dem Desktop.
     → Silent-Parameter: /S
 ```
 
-### 3. OPSI-Server Verbindung
-Das Tool verbindet sich standardmäßig mit dem OPSI-Server (10.1.0.2 / backup.paedml-linux.lokal) und zeigt:
-- Vorhandene Pakete in `/var/lib/opsi/workbench/`
-- Installierte Pakete in `/var/lib/opsi/depot/`
-
-### 4. Deployment
-Das Tool zeigt die notwendigen Befehle für das Deployment:
-```bash
-scp -r "Paket-Ordner" root@10.1.0.2:/var/lib/opsi/workbench/
-ssh root@10.1.0.2
-opsi-makepackage paket-name
-opsi-package-manager -i paket-name.opsi
+### 3. Setup-Dateien platzieren
+**WICHTIG:** Kopieren Sie Ihre .exe/.msi Setup-Dateien in den `CLIENT_DATA` Ordner des erstellten Pakets:
 ```
+C:\Users\[Benutzername]\Desktop\[paket-id]_[version]\CLIENT_DATA\
+```
+
+### 4. Automatisches Deployment
+Das Tool führt automatisch folgende Schritte aus:
+- Verbindung zum OPSI-Server (10.1.0.2)
+- Upload des Pakets nach `/var/lib/opsi/workbench/`
+- Baut das OPSI-Paket (`opsi-makepackage`)
+- Installiert das Paket im OPSI-System
+- Verifiziert die Installation
 
 ## 📁 Erstellte Struktur
 
@@ -95,8 +97,8 @@ Winbatch_install
 
 - Python GUI funktioniert nicht (tkinter fehlt in Embedded Python)
 - Batch-basierte Lösung als Alternative
-- SSH muss auf Windows separat installiert sein
-- Automatisches Deployment noch nicht implementiert
+- SSH muss auf Windows verfügbar sein (normalerweise vorinstalliert)
+- SSH-Passwort muss 4x eingegeben werden (für jeden Befehl)
 
 ## 📚 Tipps
 
