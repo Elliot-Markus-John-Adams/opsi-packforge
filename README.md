@@ -7,8 +7,15 @@
 In PowerShell (Admin-VM) ausführen:
 
 ```powershell
-# Mit Proxy-Authentifizierung (für Schulnetzwerke)
+# Installation (nur einmal nötig)
 [System.Net.WebRequest]::DefaultWebProxy.Credentials = [System.Net.CredentialCache]::DefaultCredentials; iex ((New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/Elliot-Markus-John-Adams/opsi-packforge/main/install.ps1'))
+```
+
+## ⚡ Schnellstart (nach Installation)
+
+```powershell
+# OPSI PackForge direkt starten
+iex ((New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/Elliot-Markus-John-Adams/opsi-packforge/main/start.ps1'))
 ```
 
 ## ✨ Features
