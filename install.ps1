@@ -1,5 +1,18 @@
 # OPSI PackForge - Einfacher Installer
-# Minimale Version mit Benutzer-Interaktion
+# Prueft ob bereits installiert und startet direkt
+
+$installPath = "$env:LOCALAPPDATA\OPSI-PackForge"
+$appPath = "$installPath\app\opsi_packforge.bat"
+
+# Pruefen ob bereits installiert
+if (Test-Path $appPath) {
+    Write-Host ""
+    Write-Host "OPSI PackForge ist bereits installiert!" -ForegroundColor Green
+    Write-Host "Starte Anwendung..." -ForegroundColor Yellow
+    Write-Host ""
+    Start-Process $appPath
+    exit
+}
 
 Clear-Host
 Write-Host ""
@@ -24,7 +37,6 @@ switch ($choice) {
         
         # Schritt 1
         Write-Host "Schritt 1: Erstelle Verzeichnis..." -ForegroundColor Yellow
-        $installPath = "$env:LOCALAPPDATA\OPSI-PackForge"
         New-Item -ItemType Directory -Path $installPath -Force | Out-Null
         Write-Host "OK - Verzeichnis erstellt: $installPath" -ForegroundColor Green
         Write-Host ""
