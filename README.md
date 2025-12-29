@@ -11,13 +11,6 @@ In PowerShell (Admin-VM) ausführen:
 [System.Net.WebRequest]::DefaultWebProxy.Credentials = [System.Net.CredentialCache]::DefaultCredentials; iex ((New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/Elliot-Markus-John-Adams/opsi-packforge/main/install.ps1'))
 ```
 
-## ⚡ Schnellstart (nach Installation)
-
-```powershell
-# OPSI PackForge direkt starten
-iex ((New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/Elliot-Markus-John-Adams/opsi-packforge/main/start.ps1'))
-```
-
 ## ✨ Features
 
 - ✅ **Einfache Paket-Erstellung** - Interaktives Menü-System
@@ -102,8 +95,6 @@ Winbatch_install
 
 ## 🛠️ Bekannte Einschränkungen
 
-- Python GUI funktioniert nicht (tkinter fehlt in Embedded Python)
-- Batch-basierte Lösung als Alternative
 - SSH muss auf Windows verfügbar sein (normalerweise vorinstalliert)
 - SSH-Passwort muss 4x eingegeben werden (für jeden Befehl)
 

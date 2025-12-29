@@ -64,14 +64,6 @@ switch ($choice) {
                 Expand-Archive -Path $pythonZip -DestinationPath "$installPath\python" -Force
                 Remove-Item $pythonZip
             
-            # Python konfigurieren für tkinter
-            $pthFile = "$installPath\python\python311._pth"
-            if (Test-Path $pthFile) {
-                $content = Get-Content $pthFile
-                $content = $content -replace "#import site", "import site"
-                Set-Content -Path $pthFile -Value $content
-            }
-            
                 Write-Host "OK - Python installiert" -ForegroundColor Green
                 Write-Host ""
             } catch {
@@ -88,7 +80,7 @@ switch ($choice) {
         $appPath = "$installPath\app"
         New-Item -ItemType Directory -Path $appPath -Force | Out-Null
         
-        # Erstelle ein einfaches Batch-Script als GUI-Alternative
+        # Erstelle das Haupt-Script
         $batchScript = @'
 @echo off
 title OPSI PackForge v1.0
