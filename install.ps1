@@ -4,14 +4,13 @@
 $installPath = "$env:LOCALAPPDATA\OPSI-PackForge"
 $appPath = "$installPath\app\opsi_packforge.bat"
 
-# Pruefen ob bereits installiert
+# Pruefen ob bereits installiert - aber trotzdem aktualisieren
 if (Test-Path $appPath) {
     Write-Host ""
     Write-Host "OPSI PackForge ist bereits installiert!" -ForegroundColor Green
-    Write-Host "Starte Anwendung..." -ForegroundColor Yellow
+    Write-Host "Aktualisiere auf neueste Version..." -ForegroundColor Yellow
     Write-Host ""
-    Start-Process $appPath
-    exit
+    # Fahre mit Installation fort um die Datei zu aktualisieren
 }
 
 Clear-Host
