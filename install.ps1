@@ -427,14 +427,16 @@ set /p confirm="Sind Sie sicher? (J/N): "
 if /i NOT "%confirm%"=="J" goto menu
 
 echo.
-echo Pruefe Client-Zuweisungen...
-ssh %opsiuser%@%opsiserver% "opsi-admin -d method getProductActionRequests %pkgdelete%"
-
-echo.
 echo Loesche Paket vom Server...
 ssh %opsiuser%@%opsiserver% "opsi-package-manager -r %pkgdelete%"
+if errorlevel 1 (
+    echo [FEHLER] Paket konnte nicht geloescht werden
+    echo Moeglicherweise ist es noch Clients zugewiesen
+    pause
+    goto menu
+)
 
-echo Loesche Workbench-Verzeichnis...
+echo Loesche Workbench-Verzeichnis falls vorhanden...
 ssh %opsiuser%@%opsiserver% "rm -rf /var/lib/opsi/workbench/%pkgdelete%*"
 
 echo.
