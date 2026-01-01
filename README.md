@@ -1,132 +1,268 @@
 # 📦 OPSI PackForge
 
-**OPSI PackForge** - Einfaches Tool zur Erstellung von OPSI-Paketen für paedML Linux
+**OPSI PackForge** - Professionelles Tool zur Verwaltung von OPSI-Paketen für paedML Linux
 
-## 🚀 Schnellinstallation
+## 🚀 Installation
 
-In PowerShell (Admin-VM) ausführen:
-
+### PowerShell (empfohlen)
 ```powershell
-# Installation (nur einmal nötig)
-[System.Net.WebRequest]::DefaultWebProxy.Credentials = [System.Net.CredentialCache]::DefaultCredentials; iex ((New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/Elliot-Markus-John-Adams/opsi-packforge/main/install.ps1'))
+# Einmalige Installation mit Proxy-Support
+[System.Net.WebRequest]::DefaultWebProxy.Credentials = [System.Net.CredentialCache]::DefaultCredentials
+iex ((New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/Elliot-Markus-John-Adams/opsi-packforge/main/install.ps1'))
 ```
 
-## ✨ Features
+### Alternative: Lokale Installation
+1. Repository herunterladen
+2. PowerShell als Administrator öffnen
+3. `.\install.ps1` ausführen
 
-- ✅ **Einfache Paket-Erstellung** - Interaktives Menü-System
-- ✅ **OPSI-konforme Struktur** - Erstellt control und opsiscript Dateien
-- ✅ **Automatisches Deployment** - Direktes Hochladen und Installieren auf OPSI-Server
-- ✅ **SSH-Integration** - Verbindung zum OPSI-Server (10.1.0.2)
-- ✅ **Setup-Datei Support** - Automatisches Kopieren der Installer
-- ✅ **Silent-Parameter** - Unterstützung für unbeaufsichtigte Installation
-- ✅ **Explorer-Integration** - Öffnet automatisch das erstellte Paket-Verzeichnis
+## ✨ Hauptfunktionen
+
+### 📋 Paketverwaltung
+- **Erstellen** - Neue OPSI-Pakete mit vollständigen Metadaten
+- **Aktualisieren** - Bestehende Pakete im Depot updaten
+- **Löschen** - Pakete vom OPSI-Server entfernen
+- **Deployment** - Automatisches Hochladen und Installieren
+
+### 🔧 Erweiterte Features
+- ✅ **Vollständige Metadaten** - Description, Advice, Dependencies
+- ✅ **Multi-Datei Support** - Mehrere Setup-Dateien pro Paket
+- ✅ **Automatische Versionierung** - Incrementelle Updates
+- ✅ **Silent-Parameter Bibliothek** - Vordefinierte Installer-Parameter
+- ✅ **SSH-Integration** - Direkte Server-Kommunikation
+- ✅ **Depot-Synchronisation** - Live-Updates vom Server
 
 ## 📋 Systemanforderungen
 
-- Windows 10/11 (paedML Admin-VM)
-- PowerShell 5.1+
-- SSH-Client (optional, für Server-Verbindung)
-- Netzwerkzugriff zum OPSI-Server (10.1.0.2 / backup.paedml-linux.lokal)
+- **OS:** Windows 10/11 (paedML Admin-VM)
+- **PowerShell:** Version 5.1 oder höher
+- **Netzwerk:** Zugriff auf OPSI-Server (10.1.0.2)
+- **Optional:** SSH-Client für erweiterte Funktionen
 
-## 🎯 Verwendung
+## 🎯 Verwendungsbeispiele
 
-### 1. Installation ausführen
-Nach der Installation finden Sie "OPSI PackForge" auf dem Desktop.
-
-### 2. Paket erstellen
+### Neues Paket erstellen
 ```
+OPSI PackForge Hauptmenü
 [1] Neues Paket erstellen
-    → Paket-ID: firefox
-    → Name: Mozilla Firefox  
-    → Version: 120.0.0
-    → Setup-Datei: C:\Downloads\Firefox.exe
-    → Silent-Parameter: /S
+
+Paket-Konfiguration:
+- Paket-ID: mozilla-firefox
+- Name: Mozilla Firefox ESR
+- Version: 115.0.0
+- Beschreibung: Webbrowser für Bildungseinrichtungen
+- Abhängigkeiten: msvcredist2019
+- Setup-Dateien: Firefox-ESR.exe, config.ini
+- Silent-Parameter: /S /INI=config.ini
 ```
 
-### 3. Setup-Dateien platzieren
-**WICHTIG:** Kopieren Sie Ihre .exe/.msi Setup-Dateien in den `CLIENT_DATA` Ordner des erstellten Pakets:
+### Paket aktualisieren
 ```
-C:\Users\[Benutzername]\Desktop\[paket-id]_[version]\CLIENT_DATA\
+[2] Paket aktualisieren
+
+Wählen Sie das Paket:
+→ mozilla-firefox_115.0.0
+
+Neue Version: 115.1.0
+Dateien ersetzen: Firefox-ESR.exe
+→ Automatisches Backup der alten Version
+→ Upload zum Server
+→ Depot-Aktualisierung
 ```
 
-### 4. Automatisches Deployment
-Das Tool führt automatisch folgende Schritte aus:
-- Verbindung zum OPSI-Server (10.1.0.2)
-- Upload des Pakets nach `/var/lib/opsi/workbench/`
-- Baut das OPSI-Paket (`opsi-makepackage`)
-- Installiert das Paket im OPSI-System
-- Verifiziert die Installation
+### Paket vom Server löschen
+```
+[3] Paket löschen
 
-## 📁 Erstellte Struktur
+Server-Pakete anzeigen...
+→ Auswahl: mozilla-firefox
+→ Clients prüfen (Warnung bei zugewiesenen Clients)
+→ Sicherheitsabfrage
+→ Entfernung aus Depot und Workbench
+```
+
+## 📁 Paketstruktur
 
 ```
-paket-name_version/
+paket-id_version/
 ├── OPSI/
-│   └── control          # Paket-Metadaten
+│   ├── control           # Vollständige Metadaten
+│   ├── preinst           # Pre-Installation Script
+│   └── postinst          # Post-Installation Script
 └── CLIENT_DATA/
-    ├── setup.opsiscript # Installations-Script
-    └── setup.exe        # Setup-Datei (optional)
+    ├── setup.opsiscript  # Hauptinstallations-Script
+    ├── uninstall.opsiscript
+    ├── files/            # Setup-Dateien
+    │   ├── setup.exe
+    │   └── config.ini
+    └── custom/           # Benutzerdefinierte Scripts
 ```
 
-## 🔧 control Datei Beispiel
+## 🔧 control Datei - Vollständiges Beispiel
 
 ```ini
+[Package]
+version: 1
+depends: 
+incremental: False
+
 [Product]
 type: localboot
-id: firefox
-name: Mozilla Firefox
-version: 120.0.0
+id: mozilla-firefox
+name: Mozilla Firefox ESR
+description: Der freie Webbrowser für Bildungseinrichtungen
+advice: Bitte alle Browser-Fenster vor Installation schließen
+version: 115.0.0
 priority: 0
+licenseRequired: False
+productClasses: web,browser
 setupScript: setup.opsiscript
+uninstallScript: uninstall.opsiscript
+updateScript: update.opsiscript
+alwaysScript: 
+onceScript: 
+customScript: 
+userLoginScript:
+
+[ProductDependency]
+action: setup
+requiredProduct: msvcredist2019
+requiredStatus: installed
+requirementType: before
+
+[ProductProperty]
+type: bool
+name: desktop-link
+description: Desktop-Verknüpfung erstellen
+default: True
 ```
 
-## 📝 setup.opsiscript Beispiel
+## 🚀 Erweiterte Befehle
 
-```
-[Actions]
-DefVar $SetupFile$
-Set $SetupFile$ = "%ScriptPath%\Firefox.exe"
-Message "Installing Firefox..."
-Winbatch_install
-
-[Winbatch_install]
-"$SetupFile$" /S
+### SSH-Key einrichten (empfohlen)
+```powershell
+# Einmalig für passwortlosen Zugriff
+ssh-keygen -t rsa -b 4096
+ssh-copy-id root@10.1.0.2
 ```
 
-## 🛠️ Bekannte Einschränkungen
+### Manuelle Server-Befehle
+```bash
+# Paket-Liste anzeigen
+opsi-package-manager -l
 
-- SSH muss auf Windows verfügbar sein (normalerweise vorinstalliert)
-- SSH-Passwort muss 4x eingegeben werden (für jeden Befehl)
+# Paket-Info
+opsi-package-manager -i paket-id
 
-## 📚 Tipps
+# Paket zu Client zuweisen
+opsi-admin -d method setProductActionRequest paket-id client-id setup
 
-1. **Silent-Parameter** vorher testen:
-   - `/S` - Für NSIS-Installer
-   - `/quiet` oder `/qn` - Für MSI
-   - `/silent` - Für andere Installer
+# Depot synchronisieren
+opsi-package-updater -v update
+```
 
-2. **SSH-Verbindung** vorbereiten:
-   - SSH-Key einrichten für passwortlosen Zugriff
-   - Oder WinSCP für grafischen Transfer nutzen
+## 📚 Best Practices
 
-3. **Paket-IDs** ohne Sonderzeichen und Leerzeichen
+### Silent-Parameter Referenz
+| Installer-Typ | Parameter | Beispiel |
+|--------------|-----------|----------|
+| NSIS | `/S` | `setup.exe /S` |
+| MSI | `/qn` | `installer.msi /qn` |
+| InnoSetup | `/VERYSILENT` | `setup.exe /VERYSILENT /NORESTART` |
+| InstallShield | `/s /v/qn` | `setup.exe /s /v/qn` |
+| 7-Zip SFX | `-y` | `archive.exe -y` |
 
-## 🤝 Support
+### Versionierung
+- **Major:** Große Änderungen (1.0.0 → 2.0.0)
+- **Minor:** Neue Features (1.0.0 → 1.1.0)
+- **Patch:** Bugfixes (1.0.0 → 1.0.1)
 
-Bei Fragen oder Problemen:
-- [Issues auf GitHub](https://github.com/Elliot-Markus-John-Adams/opsi-packforge/issues)
-- Für paedML-spezifische Fragen: paedML Support
+### Testing-Workflow
+1. Paket lokal erstellen
+2. Test-Client zuweisen
+3. Installation überwachen
+4. Logs prüfen (`/var/log/opsi/`)
+5. Bei Erfolg: Produktiv-Rollout
+
+## 🛠️ Fehlerbehebung
+
+### Häufige Probleme
+
+**SSH-Verbindung schlägt fehl**
+```powershell
+# Windows OpenSSH installieren
+Add-WindowsCapability -Online -Name OpenSSH.Client
+```
+
+**Paket-Upload fehlgeschlagen**
+```bash
+# Rechte prüfen
+ssh root@10.1.0.2 "ls -la /var/lib/opsi/workbench/"
+# Speicherplatz prüfen
+ssh root@10.1.0.2 "df -h /var/lib/opsi/"
+```
+
+**Installation auf Client schlägt fehl**
+```bash
+# Client-Logs prüfen
+ssh root@10.1.0.2 "tail -f /var/log/opsi/clientconnect/*.log"
+# Paket-Integrität prüfen
+opsi-package-manager -t paket-id
+```
+
+## 🔐 Sicherheit
+
+- Keine Passwörter im Klartext speichern
+- SSH-Keys mit Passphrase schützen
+- Regelmäßige Backups der Pakete
+- Test-Umgebung vor Produktion
+
+## 📊 Monitoring
+
+### OPSI-Webinterface
+```
+https://10.1.0.2:4447/
+Benutzer: adminuser
+```
+
+### Kommandozeilen-Monitoring
+```bash
+# Aktive Installationen
+opsi-admin -d method getProductActionRequests
+
+# Client-Status
+opsi-admin -d method getClientIds
+
+# Fehlerhafte Installationen
+opsi-admin -d method getProductInstallationStatus_hash
+```
+
+## 🤝 Mitwirkung
+
+Contributions sind willkommen! Bitte erstellen Sie einen Pull Request mit:
+- Detaillierter Beschreibung
+- Test-Ergebnissen
+- Dokumentations-Updates
 
 ## 📄 Lizenz
 
 MIT License - Frei verwendbar für Bildungseinrichtungen
 
-## 🙏 Credits
+## 🏢 Über paedML Linux
 
-Entwickelt für die paedML Linux Community
+OPSI PackForge wurde speziell für die paedML Linux Schulnetzwerklösung entwickelt und optimiert für:
+- Zentrale Software-Verteilung
+- Automatisierte Client-Verwaltung
+- Vereinfachte Paket-Erstellung für Lehrkräfte
+
+## 📞 Support
+
+- **GitHub Issues:** [Bug-Reports und Feature-Requests](https://github.com/Elliot-Markus-John-Adams/opsi-packforge/issues)
+- **paedML Support:** Über das offizielle Support-Portal
+- **Community:** paedML Linux Anwender-Forum
 
 ---
 
-**Version:** 1.0.0  
+**Version:** 2.0.0  
 **Autor:** Elliot-Markus-John-Adams  
 **Repository:** https://github.com/Elliot-Markus-John-Adams/opsi-packforge
