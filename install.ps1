@@ -428,14 +428,14 @@ if /i NOT "%confirm%"=="J" goto menu
 
 echo.
 echo Loesche Paket vom Server...
-ssh %opsiuser%@%opsiserver% "TERM=dumb opsi-package-manager -q -r %pkgdelete% 2>/dev/null || opsi-admin -d method deleteProduct %pkgdelete%"
-if errorlevel 1 (
-    echo [WARNUNG] Moeglicherweise konnte das Paket nicht vollstaendig entfernt werden
-)
+echo Verwende alternative Methode...
+ssh -t %opsiuser%@%opsiserver% "opsi-admin -d method deleteProduct %pkgdelete% depotIds=[] || echo 'Paket moeglicherweise bereits geloescht'"
 
-echo Loesche Workbench-Verzeichnis falls vorhanden...
-ssh %opsiuser%@%opsiserver% "rm -rf /var/lib/opsi/workbench/%pkgdelete%* 2>/dev/null"
-ssh %opsiuser%@%opsiserver% "rm -rf /var/lib/opsi/repository/%pkgdelete%* 2>/dev/null"
+echo.
+echo Loesche Paket-Dateien vom Server...
+ssh %opsiuser%@%opsiserver% "rm -rf /var/lib/opsi/workbench/%pkgdelete%*"
+ssh %opsiuser%@%opsiserver% "rm -rf /var/lib/opsi/repository/%pkgdelete%*"
+ssh %opsiuser%@%opsiserver% "rm -f /var/lib/opsi/depot/%pkgdelete%*"
 
 echo.
 echo [OK] Paket %pkgdelete% wurde geloescht!
