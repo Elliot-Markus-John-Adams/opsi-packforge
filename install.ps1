@@ -427,38 +427,47 @@ set /p confirm="Sind Sie sicher? (J/N): "
 if /i NOT "%confirm%"=="J" goto menu
 
 echo.
-echo Pruefe ob Paket registriert ist...
-ssh %opsiuser%@%opsiserver% "opsi-package-manager -l | grep -q '^%pkgdelete%|' && echo '[OK] Paket gefunden' || echo '[INFO] Paket nicht im Backend registriert'"
+echo Fuehre Loeschvorgang durch (nur 1x Passwort eingeben)...
+ssh -t %opsiuser%@%opsiserver% "
+echo
+echo '=== Pruefe ob Paket registriert ist ==='
+opsi-package-manager -l | grep '%pkgdelete%' | cut -d'|' -f1,2 && echo '[OK] Paket gefunden' || echo '[INFO] Paket nicht in Liste gefunden'
 
-echo.
-echo Pruefe Client-Zuordnungen...
-ssh %opsiuser%@%opsiserver% "opsi-admin -d method productOnClient_getObjects productId='%pkgdelete%' | grep -q '%pkgdelete%' && echo '[INFO] Paket ist noch Clients zugeordnet' || echo '[OK] Keine Client-Zuordnungen gefunden'"
+echo
+echo '=== Pruefe Client-Zuordnungen ==='
+opsi-admin -d method productOnClient_getObjects [] productId=%pkgdelete% 2>/dev/null | grep -q '%pkgdelete%' && echo '[INFO] Paket ist noch Clients zugeordnet' || echo '[OK] Keine Client-Zuordnungen gefunden'
 
-echo.
-echo Entferne Paket aus Backend und Depot...
-ssh -t %opsiuser%@%opsiserver% "opsi-package-manager -r %pkgdelete% 2>&1 | grep -v 'ERROR' || opsi-package-manager --remove %pkgdelete% 2>&1 | grep -v 'ERROR' || echo '[INFO] Paket nicht im Backend oder bereits entfernt'"
+echo
+echo '=== Entferne Paket aus Backend und Depot ==='
+opsi-package-manager -r %pkgdelete% 2>&1 || opsi-package-manager --remove %pkgdelete% 2>&1 || echo '[INFO] Remove-Befehl fehlgeschlagen, versuche alternative Methode...'
+opsi-admin -d method product_delete %pkgdelete% 2>/dev/null || echo '[INFO] Product_delete fehlgeschlagen'
 
-echo.
-echo Loesche Depot-Dateien falls noch vorhanden...
-ssh %opsiuser%@%opsiserver% "[ -d /var/lib/opsi/depot/%pkgdelete% ] && rm -rf /var/lib/opsi/depot/%pkgdelete% && echo '[OK] Depot-Ordner geloescht' || echo '[OK] Kein Depot-Ordner vorhanden'"
+echo
+echo '=== Loesche Depot-Dateien falls noch vorhanden ==='
+[ -d /var/lib/opsi/depot/%pkgdelete% ] && rm -rf /var/lib/opsi/depot/%pkgdelete% && echo '[OK] Depot-Ordner geloescht' || echo '[OK] Kein Depot-Ordner vorhanden'
 
-echo.
-echo Loesche Workbench-Dateien...
-ssh %opsiuser%@%opsiserver% "[ -d /var/lib/opsi/workbench/%pkgdelete% ] && rm -rf /var/lib/opsi/workbench/%pkgdelete% && echo '[OK] Workbench-Ordner geloescht' || echo '[OK] Kein Workbench-Ordner vorhanden'"
-ssh %opsiuser%@%opsiserver% "rm -f /var/lib/opsi/workbench/%pkgdelete%*.opsi 2>/dev/null && echo '[OK] .opsi-Dateien geloescht' || echo '[OK] Keine .opsi-Dateien vorhanden'"
+echo
+echo '=== Loesche Workbench-Dateien ==='
+[ -d /var/lib/opsi/workbench/%pkgdelete% ] && rm -rf /var/lib/opsi/workbench/%pkgdelete% && echo '[OK] Workbench-Ordner geloescht' || echo '[OK] Kein Workbench-Ordner vorhanden'
+rm -f /var/lib/opsi/workbench/%pkgdelete%*.opsi 2>/dev/null && echo '[OK] .opsi-Dateien geloescht' || echo '[OK] Keine .opsi-Dateien vorhanden'
 
-echo.
-echo Loesche Repository-Dateien...
-ssh %opsiuser%@%opsiserver% "rm -rf /var/lib/opsi/repository/%pkgdelete%* 2>/dev/null && echo '[OK] Repository-Dateien geloescht' || echo '[OK] Keine Repository-Dateien vorhanden'"
+echo
+echo '=== Loesche Repository-Dateien ==='
+rm -rf /var/lib/opsi/repository/%pkgdelete%* 2>/dev/null && echo '[OK] Repository-Dateien geloescht' || echo '[OK] Keine Repository-Dateien vorhanden'
 
-echo.
-echo Korrigiere Dateirechte...
-ssh %opsiuser%@%opsiserver% "opsi-set-rights /var/lib/opsi/depot 2>/dev/null && echo '[OK] Dateirechte korrigiert' || echo '[INFO] opsi-set-rights nicht verfuegbar'"
+echo
+echo '=== Korrigiere Dateirechte ==='
+opsi-set-rights /var/lib/opsi/depot 2>/dev/null && echo '[OK] Dateirechte korrigiert' || echo '[INFO] opsi-set-rights nicht verfuegbar'
 
-echo.
-echo === ABSCHLUSSKONTROLLE ===
-ssh %opsiuser%@%opsiserver% "opsi-package-manager -l | grep -q '^%pkgdelete%|' && echo '[WARNUNG] Paket noch im Backend!' || echo '[OK] Paket nicht mehr im Backend'"
-ssh %opsiuser%@%opsiserver% "[ -d /var/lib/opsi/depot/%pkgdelete% ] && echo '[WARNUNG] Depot-Ordner noch vorhanden!' || echo '[OK] Depot-Ordner entfernt'"
+echo
+echo '=== ABSCHLUSSKONTROLLE ==='
+echo 'Pruefe Backend...'
+opsi-package-manager -l | grep '%pkgdelete%' && echo '[WARNUNG] Paket %pkgdelete% noch in Liste vorhanden!' || echo '[OK] Paket nicht mehr in Liste'
+echo
+echo 'Pruefe Dateisystem...'
+[ -d /var/lib/opsi/depot/%pkgdelete% ] && echo '[WARNUNG] Depot-Ordner noch vorhanden!' || echo '[OK] Depot-Ordner entfernt'
+ls -la /var/lib/opsi/workbench/ | grep '%pkgdelete%' && echo '[WARNUNG] Workbench-Dateien noch vorhanden!' || echo '[OK] Workbench sauber'
+"
 
 echo.
 echo [FERTIG] Loeschvorgang abgeschlossen!
