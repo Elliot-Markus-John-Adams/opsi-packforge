@@ -427,10 +427,37 @@ set /p confirm="Sind Sie sicher? (J/N): "
 if /i NOT "%confirm%"=="J" goto menu
 
 echo.
-echo Fuehre Loeschvorgang durch (nur 1x Passwort eingeben)...
+echo === STARTE LOESCHVORGANG ===
 echo.
 
-ssh %opsiuser%@%opsiserver% "/bin/bash -c 'echo; echo \"=== Pruefe ob Paket registriert ist ===\"; opsi-package-manager -l | grep \"%pkgdelete%\" | cut -d\"|\" -f1,2 && echo \"[OK] Paket gefunden\" || echo \"[INFO] Paket nicht in Liste gefunden\"; echo; echo \"=== Entferne Paket aus Backend und Depot ===\"; opsi-package-manager -r %pkgdelete% 2>&1 || opsi-package-manager --remove %pkgdelete% 2>&1 || echo \"[INFO] Remove-Befehl fehlgeschlagen\"; echo; echo \"=== Loesche Depot-Dateien ===\"; [ -d /var/lib/opsi/depot/%pkgdelete% ] && rm -rf /var/lib/opsi/depot/%pkgdelete% && echo \"[OK] Depot-Ordner geloescht\" || echo \"[OK] Kein Depot-Ordner vorhanden\"; echo; echo \"=== Loesche Workbench-Dateien ===\"; [ -d /var/lib/opsi/workbench/%pkgdelete% ] && rm -rf /var/lib/opsi/workbench/%pkgdelete% && echo \"[OK] Workbench-Ordner geloescht\" || echo \"[OK] Kein Workbench-Ordner vorhanden\"; rm -f /var/lib/opsi/workbench/%pkgdelete%*.opsi 2>/dev/null; echo; echo \"=== Loesche Repository-Dateien ===\"; rm -rf /var/lib/opsi/repository/%pkgdelete%* 2>/dev/null; echo \"[OK] Repository bereinigt\"; echo; echo \"=== Korrigiere Dateirechte ===\"; opsi-set-rights /var/lib/opsi/depot 2>/dev/null && echo \"[OK] Dateirechte korrigiert\" || echo \"[INFO] opsi-set-rights nicht verfuegbar\"; echo; echo \"=== ABSCHLUSSKONTROLLE ===\"; echo \"Pruefe Backend...\"; opsi-package-manager -l | grep \"%pkgdelete%\" && echo \"[WARNUNG] Paket %pkgdelete% noch in Liste vorhanden!\" || echo \"[OK] Paket nicht mehr in Liste\"; echo \"Pruefe Dateisystem...\"; [ -d /var/lib/opsi/depot/%pkgdelete% ] && echo \"[WARNUNG] Depot-Ordner noch vorhanden!\" || echo \"[OK] Depot-Ordner entfernt\"; ls -la /var/lib/opsi/workbench/ | grep \"%pkgdelete%\" && echo \"[WARNUNG] Workbench-Dateien noch vorhanden!\" || echo \"[OK] Workbench sauber\"'"
+echo Schritt 1: Pruefe ob Paket registriert ist...
+ssh %opsiuser%@%opsiserver% "opsi-package-manager -l | grep '%pkgdelete%' && echo '[OK] Paket gefunden' || echo '[INFO] Paket nicht in Liste gefunden'"
+
+echo.
+echo Schritt 2: Entferne Paket aus Backend...
+ssh %opsiuser%@%opsiserver% "opsi-package-manager -r %pkgdelete% 2>&1 || opsi-package-manager --remove %pkgdelete% 2>&1 || echo '[INFO] Paket nicht installiert oder bereits entfernt'"
+
+echo.
+echo Schritt 3: Loesche Depot-Ordner...
+ssh %opsiuser%@%opsiserver% "if [ -d /var/lib/opsi/depot/%pkgdelete% ]; then rm -rf /var/lib/opsi/depot/%pkgdelete% && echo '[OK] Depot-Ordner geloescht'; else echo '[OK] Kein Depot-Ordner vorhanden'; fi"
+
+echo.
+echo Schritt 4: Loesche Workbench-Dateien...
+ssh %opsiuser%@%opsiserver% "if [ -d /var/lib/opsi/workbench/%pkgdelete% ]; then rm -rf /var/lib/opsi/workbench/%pkgdelete% && echo '[OK] Workbench-Ordner geloescht'; else echo '[OK] Kein Workbench-Ordner vorhanden'; fi"
+ssh %opsiuser%@%opsiserver% "rm -f /var/lib/opsi/workbench/%pkgdelete%*.opsi 2>/dev/null || true"
+
+echo.
+echo Schritt 5: Loesche Repository-Dateien...
+ssh %opsiuser%@%opsiserver% "rm -rf /var/lib/opsi/repository/%pkgdelete%* 2>/dev/null || true; echo '[OK] Repository bereinigt'"
+
+echo.
+echo Schritt 6: Korrigiere Dateirechte...
+ssh %opsiuser%@%opsiserver% "opsi-set-rights /var/lib/opsi/depot 2>/dev/null && echo '[OK] Dateirechte korrigiert' || echo '[INFO] opsi-set-rights nicht verfuegbar'"
+
+echo.
+echo === ABSCHLUSSKONTROLLE ===
+ssh %opsiuser%@%opsiserver% "opsi-package-manager -l | grep '%pkgdelete%' && echo '[WARNUNG] Paket noch in Liste!' || echo '[OK] Paket entfernt'"
+ssh %opsiuser%@%opsiserver% "[ -d /var/lib/opsi/depot/%pkgdelete% ] && echo '[WARNUNG] Depot-Ordner noch da!' || echo '[OK] Depot sauber'"
 
 echo.
 echo [FERTIG] Loeschvorgang abgeschlossen!
