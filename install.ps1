@@ -399,83 +399,54 @@ goto menu
 :delete
 cls
 echo.
-echo === PAKET LOESCHEN ===
+echo === PAKET LOESCHEN (STABIL) ===
 echo.
+
 set /p opsiserver="OPSI-Server (Enter = 10.1.0.2): "
 if "%opsiserver%"=="" set opsiserver=10.1.0.2
 set /p opsiuser="SSH-Benutzer (Enter = root): "
 if "%opsiuser%"=="" set opsiuser=root
 
 echo.
-echo Teste Server-Verbindung...
-ping -n 1 %opsiserver% >nul 2>&1
-if errorlevel 1 (
-    echo [FEHLER] Server nicht erreichbar!
+echo Installierte Pakete:
+ssh %opsiuser%@%opsiserver% "opsi-package-manager -l"
+echo.
+set /p pkgdelete="Paket-ID (exakt, z.B. test04): "
+
+echo.
+echo WARNUNG: Paket '%pkgdelete%' wird komplett entfernt!
+set /p confirm="Wirklich loeschen? (J/N): "
+if /i not "%confirm%"=="J" (
+    echo Abbruch.
     pause
     goto menu
 )
 
 echo.
-echo Installierte Pakete:
-ssh %opsiuser%@%opsiserver% "opsi-package-manager -l | cut -d'|' -f2 | grep -v 'product'"
-echo.
-set /p pkgdelete="Welches Paket loeschen? (Paket-ID): "
-
-echo.
-echo WARNUNG: Dies loescht das Paket %pkgdelete% vom Server!
-set /p confirm="Sind Sie sicher? (J/N): "
-if /i not "%confirm%"=="j" (
-    if /i not "%confirm%"=="J" (
-        echo Abbruch...
-        pause
-        goto menu
-    )
-)
-
-echo.
-echo === STARTE LOESCHVORGANG ===
+echo === LOESCHVORGANG STARTET ===
 echo.
 
-echo Schritt 1: Pruefe ob Paket registriert ist...
-ssh %opsiuser%@%opsiserver% "opsi-package-manager -l 2>/dev/null | grep -E '^ *%pkgdelete% ' && echo '[OK] Paket gefunden' || echo '[INFO] Paket nicht in Liste gefunden'"
+echo [1/4] Entferne Paket aus OPSI...
+ssh %opsiuser%@%opsiserver% "opsi-package-manager -r %pkgdelete% || echo '[INFO] Paket evtl. nicht registriert'"
 
 echo.
-echo Schritt 2: Loesche Paket mit opsi-package-uninstall...
-ssh %opsiuser%@%opsiserver% "opsi-package-manager --uninstall %pkgdelete% 2>&1 | head -5 || echo '[INFO] Versuche alternative Methode...'"
-
-echo.  
-echo Schritt 3: Alternative - Entferne ueber JSON-RPC...
-ssh %opsiuser%@%opsiserver% "python -c \"import sys; sys.path.append('/usr/lib/python2.7/dist-packages'); from OPSI.Backend.BackendManager import BackendManager; backend = BackendManager(); backend.product_deleteObjects([backend.product_getObjects(id='%pkgdelete%')[0]]) if backend.product_getObjects(id='%pkgdelete%') else None; print('[OK] Produkt entfernt')\" 2>/dev/null || echo '[INFO] Manuelle Loeschung erforderlich'"
+echo [2/4] Loesche Depot-Ordner...
+ssh %opsiuser%@%opsiserver% "rm -rf /var/lib/opsi/depot/%pkgdelete% && echo '[OK] Depot geloescht' || echo '[INFO] Kein Depot-Ordner oder keine Rechte'"
 
 echo.
-echo Schritt 4: Entferne Depot- und Client-Zuordnungen...
-ssh %opsiuser%@%opsiserver% "opsi-admin -d method productOnDepot_deleteObjects [] productId=%pkgdelete% 2>/dev/null; opsi-admin -d method productOnClient_deleteObjects [] productId=%pkgdelete% 2>/dev/null; echo '[OK] Zuordnungen entfernt'"
+echo [3/4] Loesche Workbench & Repository...
+ssh %opsiuser%@%opsiserver% "rm -rf /var/lib/opsi/workbench/%pkgdelete%* /var/lib/opsi/repository/%pkgdelete%* && echo '[OK] Dateien entfernt' || echo '[INFO] Nichts zu loeschen oder keine Rechte'"
 
 echo.
-echo Schritt 5: Loesche Depot-Ordner (falls noch vorhanden)...
-ssh %opsiuser%@%opsiserver% "if [ -d /var/lib/opsi/depot/%pkgdelete% ]; then rm -rf /var/lib/opsi/depot/%pkgdelete% && echo '[OK] Depot-Ordner geloescht'; else echo '[OK] Kein Depot-Ordner vorhanden'; fi"
+echo [4/4] Setze Dateirechte...
+ssh %opsiuser%@%opsiserver% "opsi-set-rights /var/lib/opsi >/dev/null 2>&1 || true"
 
 echo.
-echo Schritt 6: Loesche Workbench-Dateien...
-ssh %opsiuser%@%opsiserver% "if [ -d /var/lib/opsi/workbench/%pkgdelete% ]; then rm -rf /var/lib/opsi/workbench/%pkgdelete% && echo '[OK] Workbench-Ordner geloescht'; else echo '[OK] Kein Workbench-Ordner vorhanden'; fi"
-ssh %opsiuser%@%opsiserver% "rm -f /var/lib/opsi/workbench/%pkgdelete%_*.opsi 2>/dev/null || true"
+echo === ABSCHLUSS ===
+ssh %opsiuser%@%opsiserver% "opsi-package-manager -l | grep -E '^ *%pkgdelete% ' && echo '[WARNUNG] Paket noch sichtbar' || echo '[OK] Paket entfernt'"
 
 echo.
-echo Schritt 7: Loesche Repository-Dateien...
-ssh %opsiuser%@%opsiserver% "rm -rf /var/lib/opsi/repository/%pkgdelete%_* 2>/dev/null || true; echo '[OK] Repository bereinigt'"
-
-echo.
-echo Schritt 8: Korrigiere Dateirechte...
-ssh %opsiuser%@%opsiserver% "opsi-set-rights /var/lib/opsi/depot 2>/dev/null && echo '[OK] Dateirechte korrigiert' || echo '[INFO] opsi-set-rights nicht verfuegbar'"
-
-echo.
-echo === ABSCHLUSSKONTROLLE ===
-ssh %opsiuser%@%opsiserver% "opsi-package-manager -l | grep -E '^ *%pkgdelete% ' && echo '[WARNUNG] Paket noch in Liste!' || echo '[OK] Paket aus Liste entfernt'"
-ssh %opsiuser%@%opsiserver% "[ -d /var/lib/opsi/depot/%pkgdelete% ] && echo '[WARNUNG] Depot-Ordner noch vorhanden!' || echo '[OK] Depot-Ordner entfernt'"
-ssh %opsiuser%@%opsiserver% "ls /var/lib/opsi/workbench/%pkgdelete%_*.opsi 2>/dev/null && echo '[WARNUNG] OPSI-Dateien noch in Workbench!' || echo '[OK] Workbench sauber'"
-
-echo.
-echo [FERTIG] Loeschvorgang abgeschlossen!
+echo Fertig.
 pause
 goto menu
 
