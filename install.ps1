@@ -427,42 +427,10 @@ set /p confirm="Sind Sie sicher? (J/N): "
 if /i NOT "%confirm%"=="J" goto menu
 
 echo.
-echo Starte Loeschvorgang...
+echo Fuehre Loeschvorgang durch (nur 1x Passwort eingeben)...
 echo.
 
-REM Erstelle temporaeres Script auf dem Server
-echo Erstelle Loeschscript auf Server...
-(
-echo #!/bin/bash
-echo PKGID="%pkgdelete%"
-echo echo
-echo echo "=== Pruefe ob Paket registriert ist ==="
-echo opsi-package-manager -l ^| grep "$PKGID" ^| cut -d'^|' -f1,2 ^&^& echo "[OK] Paket gefunden" ^|^| echo "[INFO] Paket nicht in Liste gefunden"
-echo echo
-echo echo "=== Entferne Paket aus Backend und Depot ==="
-echo opsi-package-manager -r "$PKGID" 2^>^&1 ^|^| opsi-package-manager --remove "$PKGID" 2^>^&1 ^|^| echo "[INFO] Remove-Befehl fehlgeschlagen"
-echo echo
-echo echo "=== Loesche Depot-Dateien ==="
-echo [ -d /var/lib/opsi/depot/"$PKGID" ] ^&^& rm -rf /var/lib/opsi/depot/"$PKGID" ^&^& echo "[OK] Depot-Ordner geloescht" ^|^| echo "[OK] Kein Depot-Ordner vorhanden"
-echo echo
-echo echo "=== Loesche Workbench-Dateien ==="
-echo [ -d /var/lib/opsi/workbench/"$PKGID" ] ^&^& rm -rf /var/lib/opsi/workbench/"$PKGID" ^&^& echo "[OK] Workbench-Ordner geloescht" ^|^| echo "[OK] Kein Workbench-Ordner vorhanden"
-echo rm -f /var/lib/opsi/workbench/"$PKGID"*.opsi 2^>/dev/null
-echo echo
-echo echo "=== Loesche Repository-Dateien ==="
-echo rm -rf /var/lib/opsi/repository/"$PKGID"* 2^>/dev/null
-echo echo "[OK] Repository bereinigt"
-echo echo
-echo echo "=== Korrigiere Dateirechte ==="
-echo opsi-set-rights /var/lib/opsi/depot 2^>/dev/null ^&^& echo "[OK] Dateirechte korrigiert" ^|^| echo "[INFO] opsi-set-rights nicht verfuegbar"
-echo echo
-echo echo "=== ABSCHLUSSKONTROLLE ==="
-echo echo "Pruefe Backend..."
-echo opsi-package-manager -l ^| grep "$PKGID" ^&^& echo "[WARNUNG] Paket $PKGID noch in Liste vorhanden!" ^|^| echo "[OK] Paket nicht mehr in Liste"
-echo echo "Pruefe Dateisystem..."
-echo [ -d /var/lib/opsi/depot/"$PKGID" ] ^&^& echo "[WARNUNG] Depot-Ordner noch vorhanden!" ^|^| echo "[OK] Depot-Ordner entfernt"
-echo ls -la /var/lib/opsi/workbench/ ^| grep "$PKGID" ^&^& echo "[WARNUNG] Workbench-Dateien noch vorhanden!" ^|^| echo "[OK] Workbench sauber"
-) | ssh %opsiuser%@%opsiserver% "cat > /tmp/delete_opsi_package.sh && chmod +x /tmp/delete_opsi_package.sh && /tmp/delete_opsi_package.sh && rm -f /tmp/delete_opsi_package.sh"
+ssh %opsiuser%@%opsiserver% "/bin/bash -c 'echo; echo \"=== Pruefe ob Paket registriert ist ===\"; opsi-package-manager -l | grep \"%pkgdelete%\" | cut -d\"|\" -f1,2 && echo \"[OK] Paket gefunden\" || echo \"[INFO] Paket nicht in Liste gefunden\"; echo; echo \"=== Entferne Paket aus Backend und Depot ===\"; opsi-package-manager -r %pkgdelete% 2>&1 || opsi-package-manager --remove %pkgdelete% 2>&1 || echo \"[INFO] Remove-Befehl fehlgeschlagen\"; echo; echo \"=== Loesche Depot-Dateien ===\"; [ -d /var/lib/opsi/depot/%pkgdelete% ] && rm -rf /var/lib/opsi/depot/%pkgdelete% && echo \"[OK] Depot-Ordner geloescht\" || echo \"[OK] Kein Depot-Ordner vorhanden\"; echo; echo \"=== Loesche Workbench-Dateien ===\"; [ -d /var/lib/opsi/workbench/%pkgdelete% ] && rm -rf /var/lib/opsi/workbench/%pkgdelete% && echo \"[OK] Workbench-Ordner geloescht\" || echo \"[OK] Kein Workbench-Ordner vorhanden\"; rm -f /var/lib/opsi/workbench/%pkgdelete%*.opsi 2>/dev/null; echo; echo \"=== Loesche Repository-Dateien ===\"; rm -rf /var/lib/opsi/repository/%pkgdelete%* 2>/dev/null; echo \"[OK] Repository bereinigt\"; echo; echo \"=== Korrigiere Dateirechte ===\"; opsi-set-rights /var/lib/opsi/depot 2>/dev/null && echo \"[OK] Dateirechte korrigiert\" || echo \"[INFO] opsi-set-rights nicht verfuegbar\"; echo; echo \"=== ABSCHLUSSKONTROLLE ===\"; echo \"Pruefe Backend...\"; opsi-package-manager -l | grep \"%pkgdelete%\" && echo \"[WARNUNG] Paket %pkgdelete% noch in Liste vorhanden!\" || echo \"[OK] Paket nicht mehr in Liste\"; echo \"Pruefe Dateisystem...\"; [ -d /var/lib/opsi/depot/%pkgdelete% ] && echo \"[WARNUNG] Depot-Ordner noch vorhanden!\" || echo \"[OK] Depot-Ordner entfernt\"; ls -la /var/lib/opsi/workbench/ | grep \"%pkgdelete%\" && echo \"[WARNUNG] Workbench-Dateien noch vorhanden!\" || echo \"[OK] Workbench sauber\"'"
 
 echo.
 echo [FERTIG] Loeschvorgang abgeschlossen!
