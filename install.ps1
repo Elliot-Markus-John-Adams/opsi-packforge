@@ -414,7 +414,7 @@ if "%opsiuser%"=="" set opsiuser=root
 
 echo.
 echo === INSTALLIERTE PAKETE ===
-ssh %opsiuser%@%opsiserver% "opsi-package-manager -l | tail -n +4 | awk '{print $1}' | head -20"
+ssh %opsiuser%@%opsiserver% "opsi-package-manager -l | tail -n +4 | awk '{print $1}'"
 echo.
 echo === WORKBENCH PROJEKTE (nicht installiert) ===
 ssh %opsiuser%@%opsiserver% "cd /var/lib/opsi/workbench && for dir in */; do pkg=${dir%/}; pkgid=${pkg%%_*}; opsi-package-manager -l | grep -q \"^   $pkgid \" || echo $pkg; done 2>/dev/null"
