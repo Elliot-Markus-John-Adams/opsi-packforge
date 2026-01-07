@@ -435,17 +435,22 @@ echo.
 
 if "%deleteoption%"=="1" (
     echo Loesche Paket '%pkgdelete%' ...
-    ssh %opsiuser%@%opsiserver% "opsi-package-manager -r %pkgdelete%"
+    ssh %opsiuser%@%opsiserver% "TERM=dumb opsi-package-manager -q -r %pkgdelete%"
     if errorlevel 1 (
         echo [FEHLER] Loeschvorgang fehlgeschlagen
+        echo Versuche alternative Methode...
+        ssh %opsiuser%@%opsiserver% "opsi-admin -d method product_deleteObjects '[{\"id\":\"%pkgdelete%\",\"type\":\"LocalbootProduct\"}]'"
     ) else (
         echo [OK] Paket geloescht
     )
 ) else if "%deleteoption%"=="2" (
     echo Loesche Paket '%pkgdelete%' mit --purge ...
-    ssh %opsiuser%@%opsiserver% "opsi-package-manager -r %pkgdelete% --purge"
+    ssh %opsiuser%@%opsiserver% "TERM=dumb opsi-package-manager -q -r %pkgdelete% --purge"
     if errorlevel 1 (
         echo [FEHLER] Loeschvorgang fehlgeschlagen
+        echo Versuche alternative Methode...
+        ssh %opsiuser%@%opsiserver% "opsi-admin -d method product_deleteObjects '[{\"id\":\"%pkgdelete%\",\"type\":\"LocalbootProduct\"}]'"
+        ssh %opsiuser%@%opsiserver% "rm -rf /var/lib/opsi/depot/%pkgdelete% /var/lib/opsi/workbench/%pkgdelete%* /var/lib/opsi/repository/%pkgdelete%*"
     ) else (
         echo [OK] Paket komplett entfernt (inkl. Client-Zuordnungen)
     )
