@@ -413,10 +413,13 @@ set /p opsiuser="SSH-Benutzer (Enter = root): "
 if "%opsiuser%"=="" set opsiuser=root
 
 echo.
-echo Installierte Pakete:
-ssh %opsiuser%@%opsiserver% "opsi-package-manager -l"
+echo === INSTALLIERTE PAKETE ===
+ssh %opsiuser%@%opsiserver% "opsi-package-manager -l | tail -n +4 | awk '{print $1}' | head -20"
 echo.
-set /p pkgdelete="Paket-ID zum Loeschen (z.B. test04): "
+echo === WORKBENCH PROJEKTE (nicht installiert) ===
+ssh %opsiuser%@%opsiserver% "cd /var/lib/opsi/workbench && for dir in */; do pkg=${dir%/}; pkgid=${pkg%%_*}; opsi-package-manager -l | grep -q \"^   $pkgid \" || echo $pkg; done 2>/dev/null"
+echo.
+set /p pkgdelete="Paket-ID oder Workbench-Ordner zum Loeschen: "
 
 echo.
 echo WARNUNG: Paket '%pkgdelete%' wird komplett entfernt!
@@ -438,38 +441,39 @@ echo.
 echo === LOESCHVORGANG STARTET ===
 echo.
 
+REM Extrahiere Paket-ID falls Workbench-Ordnername eingegeben wurde
+for /f "tokens=1 delims=_" %%i in ("%pkgdelete%") do set pkgid=%%i
+
+echo Pruefe ob Paket installiert ist...
+ssh %opsiuser%@%opsiserver% "opsi-package-manager -l | grep -q \"^   %pkgid% \" && echo '[INFO] Paket ist installiert' || echo '[INFO] Nur in Workbench vorhanden'"
+
 if "%deleteoption%"=="1" (
-    echo Loesche Paket '%pkgdelete%' ...
-    ssh %opsiuser%@%opsiserver% "TERM=dumb opsi-package-manager -q -r %pkgdelete%"
+    echo Loesche Paket '%pkgid%' ...
+    ssh %opsiuser%@%opsiserver% "TERM=dumb opsi-package-manager -q -r %pkgid% 2>/dev/null"
     if errorlevel 1 (
-        echo [FEHLER] Loeschvorgang fehlgeschlagen
-        echo Versuche alternative Methode...
-        ssh %opsiuser%@%opsiserver% "opsi-admin -d method product_deleteObjects '[{\"id\":\"%pkgdelete%\",\"type\":\"LocalbootProduct\"}]'"
+        echo [INFO] Paket nicht installiert oder Fehler beim Loeschen
     ) else (
-        echo [OK] Paket geloescht
+        echo [OK] Paket aus OPSI entfernt
     )
 ) else if "%deleteoption%"=="2" (
-    echo Loesche Paket '%pkgdelete%' mit --purge ...
-    ssh %opsiuser%@%opsiserver% "TERM=dumb opsi-package-manager -q -r %pkgdelete% --purge"
+    echo Loesche Paket '%pkgid%' mit --purge ...
+    ssh %opsiuser%@%opsiserver% "TERM=dumb opsi-package-manager -q -r %pkgid% --purge 2>/dev/null"
     if errorlevel 1 (
-        echo [FEHLER] Loeschvorgang fehlgeschlagen
-        echo Versuche alternative Methode...
-        ssh %opsiuser%@%opsiserver% "opsi-admin -d method product_deleteObjects '[{\"id\":\"%pkgdelete%\",\"type\":\"LocalbootProduct\"}]'"
-        ssh %opsiuser%@%opsiserver% "rm -rf /var/lib/opsi/depot/%pkgdelete% /var/lib/opsi/workbench/%pkgdelete%* /var/lib/opsi/repository/%pkgdelete%*"
+        echo [INFO] Paket nicht installiert oder Fehler beim Loeschen
     ) else (
-        echo [OK] Paket komplett entfernt (inkl. Client-Zuordnungen)
+        echo [OK] Paket aus OPSI entfernt (inkl. Client-Zuordnungen)
     )
 )
 
 echo.
 echo Raeume Workbench und Repository auf...
-ssh %opsiuser%@%opsiserver% "bash -c 'cd /var/lib/opsi/workbench && (rm -rf %pkgdelete% %pkgdelete%_* %pkgdelete%.opsi* */%pkgdelete% */%pkgdelete%_* */%pkgdelete%.opsi* 2>/dev/null || true) && echo \"[OK] Workbench bereinigt\"'"
-ssh %opsiuser%@%opsiserver% "bash -c 'cd /var/lib/opsi/repository && (rm -rf %pkgdelete%* */%pkgdelete%* 2>/dev/null || true) && echo \"[OK] Repository bereinigt\"'"
-ssh %opsiuser%@%opsiserver% "bash -c 'cd /var/lib/opsi/depot && (rm -rf %pkgdelete% 2>/dev/null || true) && echo \"[OK] Depot bereinigt\"'"
+ssh %opsiuser%@%opsiserver% "bash -c 'cd /var/lib/opsi/workbench && (rm -rf %pkgid% %pkgid%_* %pkgid%.opsi* %pkgdelete% %pkgdelete%.opsi* */%pkgid% */%pkgid%_* */%pkgid%.opsi* 2>/dev/null || true) && echo \"[OK] Workbench bereinigt\"'"
+ssh %opsiuser%@%opsiserver% "bash -c 'cd /var/lib/opsi/repository && (rm -rf %pkgid%* */%pkgid%* 2>/dev/null || true) && echo \"[OK] Repository bereinigt\"'"
+ssh %opsiuser%@%opsiserver% "bash -c 'cd /var/lib/opsi/depot && (rm -rf %pkgid% 2>/dev/null || true) && echo \"[OK] Depot bereinigt\"'"
 
 echo.
 echo Pruefe ob Paket entfernt wurde...
-ssh %opsiuser%@%opsiserver% "opsi-package-manager -l | grep %pkgdelete% || echo '[OK] Paket nicht mehr in der Liste'"
+ssh %opsiuser%@%opsiserver% "opsi-package-manager -l | grep %pkgid% || echo '[OK] Paket nicht mehr in der Liste'"
 
 echo.
 echo Fertig.
