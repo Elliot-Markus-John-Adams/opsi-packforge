@@ -457,8 +457,14 @@ if "%deleteoption%"=="1" (
 )
 
 echo.
+echo Raeume Workbench und Repository auf...
+ssh %opsiuser%@%opsiserver% "bash -c 'cd /var/lib/opsi/workbench && (rm -rf %pkgdelete% %pkgdelete%_* %pkgdelete%.opsi* */%pkgdelete% */%pkgdelete%_* */%pkgdelete%.opsi* 2>/dev/null || true) && echo \"[OK] Workbench bereinigt\"'"
+ssh %opsiuser%@%opsiserver% "bash -c 'cd /var/lib/opsi/repository && (rm -rf %pkgdelete%* */%pkgdelete%* 2>/dev/null || true) && echo \"[OK] Repository bereinigt\"'"
+ssh %opsiuser%@%opsiserver% "bash -c 'cd /var/lib/opsi/depot && (rm -rf %pkgdelete% 2>/dev/null || true) && echo \"[OK] Depot bereinigt\"'"
+
+echo.
 echo Pruefe ob Paket entfernt wurde...
-ssh %opsiuser%@%opsiserver% "opsi-package-manager -l | grep %pkgdelete% || echo '[OK] Paket nicht mehr vorhanden'"
+ssh %opsiuser%@%opsiserver% "opsi-package-manager -l | grep %pkgdelete% || echo '[OK] Paket nicht mehr in der Liste'"
 
 echo.
 echo Fertig.
