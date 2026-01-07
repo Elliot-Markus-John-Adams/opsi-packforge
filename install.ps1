@@ -311,7 +311,7 @@ echo [OK] Paket auf Server kopiert
 echo.
 
 echo Schritt 2/4: Baue OPSI-Paket...
-ssh %opsiuser%@%opsiserver% "cd /var/lib/opsi/workbench && opsi-makepackage %pkgid%_%pkgversion%"
+ssh %opsiuser%@%opsiserver% "cd /var/lib/opsi/workbench && rm -f %pkgid%_%pkgversion%-*.opsi 2>/dev/null; opsi-makepackage --no-interactive %pkgid%_%pkgversion%"
 echo.
 
 echo Schritt 3/4: Installiere in OPSI...
@@ -391,7 +391,7 @@ if "%updatetype%"=="1" (
 
 echo.
 echo Suche Workbench-Ordner und baue Paket neu...
-ssh %opsiuser%@%opsiserver% "pkgdir=$(find /var/lib/opsi/workbench -maxdepth 2 -name '%pkgupdate%*' -type d | head -1); if [ -n \"$pkgdir\" ]; then cd \"$pkgdir\" && cd .. && opsi-makepackage \"$(basename $pkgdir)\"; else echo '[FEHLER] Kein Workbench-Ordner gefunden'; fi"
+ssh %opsiuser%@%opsiserver% "pkgdir=$(find /var/lib/opsi/workbench -maxdepth 2 -name '%pkgupdate%*' -type d | head -1); if [ -n \"$pkgdir\" ]; then cd \"$pkgdir\" && cd .. && opsi-makepackage --no-interactive \"$(basename $pkgdir)\"; else echo '[FEHLER] Kein Workbench-Ordner gefunden'; fi"
 echo.
 echo Installiere aktualisiertes Paket...
 ssh %opsiuser%@%opsiserver% "latest=$(ls -t /var/lib/opsi/workbench/%pkgupdate%*.opsi 2>/dev/null | head -1); if [ -n \"$latest\" ]; then opsi-package-manager -q -i \"$latest\"; else echo '[FEHLER] Kein Paket gefunden'; fi"
@@ -536,7 +536,18 @@ if "%advchoice%"=="2" (
     if "%opsiserver%"=="" set opsiserver=10.1.0.2
     set /p opsiuser="SSH-Benutzer (Enter = root): "
     if "%opsiuser%"=="" set opsiuser=root
-    ssh %opsiuser%@%opsiserver% "tail -50 /var/log/opsi/opsi-package-manager.log"
+    echo.
+    echo === VERFUEGBARE LOG-DATEIEN ===
+    ssh %opsiuser%@%opsiserver% "ls -la /var/log/opsi/*.log 2>/dev/null | tail -10"
+    echo.
+    echo === LETZTE PACKAGE.LOG EINTRAEGE ===
+    ssh %opsiuser%@%opsiserver% "if [ -f /var/log/opsi/package.log ]; then tail -20 /var/log/opsi/package.log; else echo 'package.log nicht gefunden'; fi"
+    echo.
+    echo === LETZTE OPSICONFD.LOG EINTRAEGE ===
+    ssh %opsiuser%@%opsiserver% "if [ -f /var/log/opsi/opsiconfd.log ]; then tail -20 /var/log/opsi/opsiconfd.log; else echo 'opsiconfd.log nicht gefunden'; fi"
+    echo.
+    echo === LETZTE CLIENT-LOGS ===
+    ssh %opsiuser%@%opsiserver% "ls -lt /var/log/opsi/clientconnect/*.log 2>/dev/null | head -5"
     pause
 )
 
