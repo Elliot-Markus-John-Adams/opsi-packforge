@@ -21,7 +21,7 @@ iex ((New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.co
 ### 📋 Paketverwaltung
 - **Erstellen** - Neue OPSI-Pakete mit vollständigen Metadaten
 - **Aktualisieren** - Bestehende Pakete im Depot updaten
-- **Löschen** - Pakete vom OPSI-Server entfernen
+- **Löschen** - Pakete vom OPSI-Server entfernen (NEU: mit Workbench-Bereinigung)
 - **Deployment** - Automatisches Hochladen und Installieren
 
 ### 🔧 Erweiterte Features
@@ -31,13 +31,15 @@ iex ((New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.co
 - ✅ **Silent-Parameter Bibliothek** - Vordefinierte Installer-Parameter
 - ✅ **SSH-Integration** - Direkte Server-Kommunikation
 - ✅ **Depot-Synchronisation** - Live-Updates vom Server
+- ✅ **Workbench-Management** - Verwaltung installierter und nicht-installierter Pakete
+- ✅ **Non-Interactive Mode** - Automatisches Überschreiben ohne Rückfragen
 
 ## 📋 Systemanforderungen
 
 - **OS:** Windows 10/11 (paedML Admin-VM)
 - **PowerShell:** Version 5.1 oder höher
 - **Netzwerk:** Zugriff auf OPSI-Server (10.1.0.2)
-- **Optional:** SSH-Client für erweiterte Funktionen
+- **SSH:** Windows OpenSSH Client
 
 ## 🎯 Verwendungsbeispiele
 
@@ -60,25 +62,36 @@ Paket-Konfiguration:
 ```
 [2] Paket aktualisieren
 
-Wählen Sie das Paket:
-→ mozilla-firefox_115.0.0
+Zeigt alle installierten Pakete aus opsi-package-manager -l
+Wählen Sie das Paket: firefox
 
 Neue Version: 115.1.0
-Dateien ersetzen: Firefox-ESR.exe
-→ Automatisches Backup der alten Version
-→ Upload zum Server
-→ Depot-Aktualisierung
+[1] Setup-Dateien ersetzen
+[2] Control-Datei bearbeiten
+[3] Scripts aktualisieren
+[4] Alles aktualisieren
 ```
 
-### Paket vom Server löschen
+### Paket löschen (VERBESSERT)
 ```
 [3] Paket löschen
 
-Server-Pakete anzeigen...
-→ Auswahl: mozilla-firefox
-→ Clients prüfen (Warnung bei zugewiesenen Clients)
-→ Sicherheitsabfrage
-→ Entfernung aus Depot und Workbench
+=== INSTALLIERTE PAKETE ===
+[Liste aller installierten Pakete]
+
+=== WORKBENCH PROJEKTE (nicht installiert) ===
+[Liste aller Workbench-Only Projekte]
+
+Paket-ID oder Workbench-Ordner zum Löschen: test01
+
+Löschoptionen:
+[1] Normal löschen (empfohlen)
+[2] Mit --purge (entfernt auch alle Client-Zuordnungen)
+
+→ Automatische Bereinigung von:
+  - Workbench-Ordner und .opsi Dateien
+  - Repository-Dateien
+  - Depot-Ordner
 ```
 
 ## 📁 Paketstruktur
@@ -129,13 +142,25 @@ action: setup
 requiredProduct: msvcredist2019
 requiredStatus: installed
 requirementType: before
-
-[ProductProperty]
-type: bool
-name: desktop-link
-description: Desktop-Verknüpfung erstellen
-default: True
 ```
+
+## 🆕 Neue Features in Version 2.0
+
+### Verbesserte Löschfunktion
+- Unterscheidung zwischen installierten Paketen und Workbench-Projekten
+- Vollständige Bereinigung aller Paket-Spuren
+- Unterstützung für `--purge` Option
+- Automatische Paket-ID Extraktion aus Workbench-Ordnernamen
+
+### Non-Interactive Mode
+- `opsi-makepackage --no-interactive` für automatisches Überschreiben
+- Keine Terminal-Fehler mehr bei SSH-Verbindungen
+- `TERM=dumb` Environment für fehlerfreie Remote-Ausführung
+
+### Erweiterte Log-Anzeige
+- Zeigt verfügbare Log-Dateien
+- package.log, opsiconfd.log und Client-Logs
+- Fehlertolerante Anzeige (prüft Existenz)
 
 ## 🚀 Erweiterte Befehle
 
@@ -151,14 +176,14 @@ ssh-copy-id root@10.1.0.2
 # Paket-Liste anzeigen
 opsi-package-manager -l
 
-# Paket-Info
-opsi-package-manager -i paket-id
+# Paket entfernen (einfach)
+opsi-package-manager -r paket-id
 
-# Paket zu Client zuweisen
-opsi-admin -d method setProductActionRequest paket-id client-id setup
+# Paket entfernen mit Client-Zuordnungen
+opsi-package-manager -r paket-id --purge
 
-# Depot synchronisieren
-opsi-package-updater -v update
+# Workbench bereinigen
+rm -rf /var/lib/opsi/workbench/paket*
 ```
 
 ## 📚 Best Practices
@@ -188,26 +213,28 @@ opsi-package-updater -v update
 
 ### Häufige Probleme
 
+**Terminal-Fehler bei Paket-Löschung**
+```
+ERROR: Failed to process command 'remove': setupterm: could not find terminal
+```
+→ Wurde behoben durch `TERM=dumb` und `-q` Flags
+
+**Paket existiert bereits**
+```
+Package file already exists. Press <O> to overwrite...
+```
+→ Wird automatisch überschrieben mit `--no-interactive`
+
 **SSH-Verbindung schlägt fehl**
 ```powershell
 # Windows OpenSSH installieren
 Add-WindowsCapability -Online -Name OpenSSH.Client
 ```
 
-**Paket-Upload fehlgeschlagen**
+**Workbench-Dateien bleiben nach Löschung**
+→ Nutzen Sie Option 2 (--purge) oder löschen Sie manuell:
 ```bash
-# Rechte prüfen
-ssh root@10.1.0.2 "ls -la /var/lib/opsi/workbench/"
-# Speicherplatz prüfen
-ssh root@10.1.0.2 "df -h /var/lib/opsi/"
-```
-
-**Installation auf Client schlägt fehl**
-```bash
-# Client-Logs prüfen
-ssh root@10.1.0.2 "tail -f /var/log/opsi/clientconnect/*.log"
-# Paket-Integrität prüfen
-opsi-package-manager -t paket-id
+ssh root@10.1.0.2 "rm -rf /var/lib/opsi/workbench/paket*"
 ```
 
 ## 🔐 Sicherheit
@@ -237,6 +264,20 @@ opsi-admin -d method getClientIds
 opsi-admin -d method getProductInstallationStatus_hash
 ```
 
+## 📝 Changelog
+
+### Version 2.0.1 (Aktuell)
+- ✅ Verbesserte Paket-Löschfunktion mit Workbench-Bereinigung
+- ✅ Fix für Terminal-Probleme bei opsi-package-manager
+- ✅ Erweiterte Log-Anzeige mit mehreren Log-Dateien
+- ✅ Unterstützung für Workbench-only Projekte
+- ✅ Automatisches Überschreiben existierender Pakete
+- ✅ Bessere Unterscheidung zwischen installierten und Workbench-Paketen
+- ✅ Non-Interactive Mode für alle Remote-Operationen
+
+### Version 2.0.0
+- Initiale Hauptversion mit grundlegenden Funktionen
+
 ## 🤝 Mitwirkung
 
 Contributions sind willkommen! Bitte erstellen Sie einen Pull Request mit:
@@ -263,6 +304,6 @@ OPSI PackForge wurde speziell für die paedML Linux Schulnetzwerklösung entwick
 
 ---
 
-**Version:** 2.0.0  
+**Version:** 2.0.1  
 **Autor:** Elliot-Markus-John-Adams  
 **Repository:** https://github.com/Elliot-Markus-John-Adams/opsi-packforge
