@@ -361,7 +361,7 @@ if errorlevel 1 (
 
 echo.
 echo Lade installierte Pakete vom Server...
-ssh %opsiuser%@%opsiserver% "opsi-package-manager -l | tail -n +4 | awk '{print \$1}' | sort"
+ssh %opsiuser%@%opsiserver% "opsi-package-manager -l | tail -n +4 | awk '{print $1}' | sort"
 echo.
 set /p pkgupdate="Welches Paket aktualisieren? (Paket-ID eingeben): "
 
