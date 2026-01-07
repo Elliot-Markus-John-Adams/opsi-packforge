@@ -399,7 +399,7 @@ goto menu
 :delete
 cls
 echo.
-echo === PAKET LOESCHEN (STABIL + BACKEND CLEAN) ===
+echo === PAKET LOESCHEN ===
 echo.
 
 set /p opsiserver="OPSI-Server (Enter = 10.1.0.2): "
@@ -411,12 +411,19 @@ echo.
 echo Installierte Pakete:
 ssh %opsiuser%@%opsiserver% "opsi-package-manager -l"
 echo.
-set /p pkgdelete="Paket-ID (exakt, z.B. test04): "
+set /p pkgdelete="Paket-ID zum Loeschen (z.B. test04): "
 
 echo.
-echo WARNUNG: Paket '%pkgdelete%' wird komplett entfernt (Backend + Dateien)!
-set /p confirm="Wirklich loeschen? (J/N): "
-if /i not "%confirm%"=="J" (
+echo WARNUNG: Paket '%pkgdelete%' wird komplett entfernt!
+echo.
+echo Loeschoptionen:
+echo [1] Normal loeschen (empfohlen)
+echo [2] Mit --purge (entfernt auch alle Client-Zuordnungen)
+echo [3] Abbrechen
+echo.
+set /p deleteoption="Ihre Wahl (1-3): "
+
+if "%deleteoption%"=="3" (
     echo Abbruch.
     pause
     goto menu
@@ -426,40 +433,27 @@ echo.
 echo === LOESCHVORGANG STARTET ===
 echo.
 
-echo [1/6] Ermittle Version (productVersion + packageVersion) ...
-REM Wir lesen die kombinierte Version aus opsi-package-manager -l (Format: <productVersion>-<packageVersion>)
-ssh %opsiuser%@%opsiserver% "bash -lc 'set -e; id="""%pkgdelete%"""; line=$(opsi-package-manager -l | awk -v i="$id" "$1==i {print $2; exit}"); if [ -z "$line" ]; then echo \"[INFO] Paket nicht in opsi-package-manager -l gefunden\"; exit 0; fi; pv=${line%-*}; pk=${line##*-}; echo \"[OK] Gefunden: $line (productVersion=$pv, packageVersion=$pk)\"'"
+if "%deleteoption%"=="1" (
+    echo Loesche Paket '%pkgdelete%' ...
+    ssh %opsiuser%@%opsiserver% "opsi-package-manager -r %pkgdelete%"
+    if errorlevel 1 (
+        echo [FEHLER] Loeschvorgang fehlgeschlagen
+    ) else (
+        echo [OK] Paket geloescht
+    )
+) else if "%deleteoption%"=="2" (
+    echo Loesche Paket '%pkgdelete%' mit --purge ...
+    ssh %opsiuser%@%opsiserver% "opsi-package-manager -r %pkgdelete% --purge"
+    if errorlevel 1 (
+        echo [FEHLER] Loeschvorgang fehlgeschlagen
+    ) else (
+        echo [OK] Paket komplett entfernt (inkl. Client-Zuordnungen)
+    )
+)
 
 echo.
-echo [2/6] Entferne Zuordnungen (Clients/Depot) ...
-REM Loescht alle productOnClient/productOnDepot Objekte fuer die Paket-ID
-ssh %opsiuser%@%opsiserver% "bash -lc 'id="""%pkgdelete%"""; \
-  poc=$(opsi-admin -d method productOnClient_getObjects \"[]\" \"{\\\"productId\\\":\\\"'\"$id\"'\\\"}\" 2>/dev/null || true); \
-  if echo \"$poc\" | grep -q \"^\\[\"; then opsi-admin -d method productOnClient_deleteObjects \"$poc\" >/dev/null 2>&1 || true; fi; \
-  pod=$(opsi-admin -d method productOnDepot_getObjects \"[]\" \"{\\\"productId\\\":\\\"'\"$id\"'\\\"}\" 2>/dev/null || true); \
-  if echo \"$pod\" | grep -q \"^\\[\"; then opsi-admin -d method productOnDepot_deleteObjects \"$pod\" >/dev/null 2>&1 || true; fi; \
-  echo \"[OK] Zuordnungen entfernt (soweit vorhanden)\"'"
-
-echo.
-echo [3/6] Entferne Produkt aus dem Backend ...
-REM Wichtig: product_delete braucht 4 Parameter: id, productType, productVersion, packageVersion
-ssh %opsiuser%@%opsiserver% "bash -lc 'set -e; id="""%pkgdelete%"""; line=$(opsi-package-manager -l | awk -v i=\"$id\" \"$1==i {print \$2; exit}\"); if [ -z \"$line\" ]; then echo \"[INFO] Produkt nicht gefunden (Backend evtl. schon sauber)\"; exit 0; fi; pv=${line%-*}; pk=${line##*-}; opsi-admin -d method product_delete \"'$id'\" localboot \"'$pv'\" \"'$pk'\" >/dev/null; echo \"[OK] Backend-Produkt geloescht\"'"
-
-echo.
-echo [4/6] Loesche Depot-Ordner ...
-ssh %opsiuser%@%opsiserver% "bash -lc 'id="""%pkgdelete%"""; if [ -d /var/lib/opsi/depot/$id ]; then rm -rf /var/lib/opsi/depot/$id && echo \"[OK] Depot geloescht\"; else echo \"[OK] Kein Depot-Ordner\"; fi'"
-
-echo.
-echo [5/6] Loesche Workbench/Repository + .opsi Artefakte ...
-ssh %opsiuser%@%opsiserver% "bash -lc 'id="""%pkgdelete%"""; rm -rf /var/lib/opsi/workbench/${id}* /var/lib/opsi/repository/${id}* 2>/dev/null || true; rm -f /var/lib/opsi/workbench/${id}_*.opsi 2>/dev/null || true; echo \"[OK] Dateien entfernt\"'"
-
-echo.
-echo [6/6] Setze Dateirechte ...
-ssh %opsiuser%@%opsiserver% "bash -lc 'opsi-set-rights /var/lib/opsi >/dev/null 2>&1 || true; echo \"[OK] Rechte gesetzt\"'"
-
-echo.
-echo === ABSCHLUSS ===
-ssh %opsiuser%@%opsiserver% "bash -lc 'id="""%pkgdelete%"""; if opsi-package-manager -l | awk -v i=\"$id\" \"$1==i {exit 0} END{exit 1}\"; then echo \"[WARNUNG] Paket noch sichtbar\"; exit 0; else echo \"[OK] Paket entfernt\"; fi'"
+echo Pruefe ob Paket entfernt wurde...
+ssh %opsiuser%@%opsiserver% "opsi-package-manager -l | grep %pkgdelete% || echo '[OK] Paket nicht mehr vorhanden'"
 
 echo.
 echo Fertig.
