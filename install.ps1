@@ -360,14 +360,17 @@ if errorlevel 1 (
 )
 
 echo.
-echo Lade Paketliste vom Server...
-ssh %opsiuser%@%opsiserver% "ls -1 /var/lib/opsi/workbench/ | grep -v '.opsi'"
+echo Lade installierte Pakete vom Server...
+ssh %opsiuser%@%opsiserver% "opsi-package-manager -l | tail -n +4 | awk '{print \$1}' | sort"
 echo.
-set /p pkgupdate="Welches Paket aktualisieren? (z.B. firefox_1.0.0): "
+set /p pkgupdate="Welches Paket aktualisieren? (Paket-ID eingeben): "
 
 echo.
-echo Aktuelle Version: %pkgupdate%
-set /p newversion="Neue Version: "
+echo Pruefe ob Workbench-Ordner existiert...
+ssh %opsiuser%@%opsiserver% "if [ -d /var/lib/opsi/workbench/%pkgupdate%_* ]; then echo 'Workbench-Ordner gefunden'; else echo 'Kein Workbench-Ordner - kopiere vom Depot...'; cp -r /var/lib/opsi/depot/%pkgupdate% /var/lib/opsi/workbench/%pkgupdate%_update 2>/dev/null || echo '[WARNUNG] Depot-Ordner nicht gefunden'; fi"
+
+echo.
+set /p newversion="Neue Version (Enter = Version beibehalten): "
 
 echo.
 echo [1] Setup-Dateien ersetzen
@@ -380,16 +383,18 @@ if "%updatetype%"=="1" (
     echo.
     set /p newsetup="Pfad zur neuen Setup-Datei: "
     echo Kopiere neue Setup-Datei auf Server...
-    scp "%newsetup%" %opsiuser%@%opsiserver%:/var/lib/opsi/workbench/%pkgupdate%/CLIENT_DATA/files/
+    ssh %opsiuser%@%opsiserver% "find /var/lib/opsi/workbench -maxdepth 2 -name '%pkgupdate%*' -type d | head -1" > %temp%\pkgdir.txt
+    set /p pkgdir=<%temp%\pkgdir.txt
+    scp "%newsetup%" %opsiuser%@%opsiserver%:%pkgdir%/CLIENT_DATA/files/
     echo [OK] Setup-Datei aktualisiert
 )
 
 echo.
-echo Baue Paket neu...
-ssh %opsiuser%@%opsiserver% "cd /var/lib/opsi/workbench && opsi-makepackage %pkgupdate%"
+echo Suche Workbench-Ordner und baue Paket neu...
+ssh %opsiuser%@%opsiserver% "pkgdir=$(find /var/lib/opsi/workbench -maxdepth 2 -name '%pkgupdate%*' -type d | head -1); if [ -n \"$pkgdir\" ]; then cd \"$pkgdir\" && cd .. && opsi-makepackage \"$(basename $pkgdir)\"; else echo '[FEHLER] Kein Workbench-Ordner gefunden'; fi"
 echo.
 echo Installiere aktualisiertes Paket...
-ssh %opsiuser%@%opsiserver% "opsi-package-manager -i /var/lib/opsi/workbench/%pkgupdate%-1.opsi"
+ssh %opsiuser%@%opsiserver% "latest=$(ls -t /var/lib/opsi/workbench/%pkgupdate%*.opsi 2>/dev/null | head -1); if [ -n \"$latest\" ]; then opsi-package-manager -q -i \"$latest\"; else echo '[FEHLER] Kein Paket gefunden'; fi"
 
 echo.
 echo [OK] Paket aktualisiert!
