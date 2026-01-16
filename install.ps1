@@ -1,10 +1,10 @@
 # OPSI PackForge - Einfacher Installer
-# Prueft ob bereits installiert und startet direkt
+# Prüft ob bereits installiert und startet direkt
 
 $installPath = "$env:LOCALAPPDATA\OPSI-PackForge"
 $appPath = "$installPath\app\opsi_packforge.bat"
 
-# Pruefen ob bereits installiert - aber trotzdem aktualisieren
+# Prüfen ob bereits installiert - aber trotzdem aktualisieren
 if (Test-Path $appPath) {
     Write-Host ""
     Write-Host "OPSI PackForge ist bereits installiert!" -ForegroundColor Green
@@ -24,7 +24,7 @@ Write-Host "[1] Installation starten" -ForegroundColor Yellow
 Write-Host "[2] Beenden" -ForegroundColor Yellow
 Write-Host ""
 
-$choice = Read-Host "Bitte waehlen Sie eine Option (1-2)"
+$choice = Read-Host "Bitte wählen Sie eine Option (1-2)"
 
 switch ($choice) {
     "1" {
@@ -38,7 +38,7 @@ switch ($choice) {
         Write-Host "OK - Verzeichnis erstellt: $installPath" -ForegroundColor Green
         Write-Host ""
         
-        # Schritt 2 - Python nur wenn noetig
+        # Schritt 2 - Python nur wenn nötig
         if (-not (Test-Path "$installPath\python\python.exe")) {
             Write-Host "Schritt 2: Lade Python herunter..." -ForegroundColor Yellow
             Write-Host "Dies kann einige Minuten dauern..." -ForegroundColor Gray
@@ -68,7 +68,7 @@ switch ($choice) {
                 exit 1
             }
         } else {
-            Write-Host "Schritt 2-3: Python bereits vorhanden - ueberspringe Download" -ForegroundColor Green
+            Write-Host "Schritt 2-3: Python bereits vorhanden - überspringe Download" -ForegroundColor Green
             Write-Host ""
         }
         
@@ -80,6 +80,7 @@ switch ($choice) {
         # Erstelle das Haupt-Script
         $batchScript = @'
 @echo off
+chcp 65001 >nul
 setlocal enabledelayedexpansion
 title OPSI PackForge v2.0
 color 0A
@@ -87,13 +88,17 @@ color 0A
 :menu
 cls
 echo.
-echo =====================================
-echo       OPSI PackForge v2.0
-echo =====================================
+echo  ___  ____  ____ ___   ____            _     __
+echo / _ ^\^|  _ ^\/ ___^|_ _^| ^|  _ ^\ __ _  ___^| ^| __/ _^| ___  _ __ __ _  ___
+echo ^| ^| ^| ^| ^|_) ^\___^\^| ^|  ^| ^|_) / _` ^|/ __^| ^|/ / ^|_ / _ ^\^| '__/ _` ^|/ _ ^\
+echo ^| ^|_^| ^|  __/ ___) ^| ^|  ^|  __/ (_^| ^| (__^|   ^<^|  _^| (_) ^| ^| ^| (_^| ^|  __/
+echo  ^\___/^|_^|   ^|____/___^| ^|_^|   ^\__,_^|^\___^|_^|^\_%\_^|  ^\___/^|_^|  ^\__,_^|^\___^|
+echo.
+echo                         [ v2.0 ]
 echo.
 echo [1] Neues Paket erstellen
 echo [2] Paket aktualisieren
-echo [3] Paket loeschen
+echo [3] Paket löschen
 echo [4] Server-Pakete anzeigen
 echo [5] Erweiterte Optionen
 echo [6] Hilfe
@@ -126,16 +131,16 @@ echo --- ERWEITERTE METADATEN ---
 set /p pkgdesc="Beschreibung: "
 if "%pkgdesc%"=="" set pkgdesc=%pkgname% Installation
 set /p pkgadvice="Hinweise (optional): "
-set /p pkgdepends="Abhaengigkeiten (kommagetrennt, optional): "
-set /p pkgpriority="Prioritaet (0-100, Enter=0): "
+set /p pkgdepends="Abhängigkeiten (kommagetrennt, optional): "
+set /p pkgpriority="Priorität (0-100, Enter=0): "
 if "%pkgpriority%"=="" set pkgpriority=0
 set /p pkgclasses="Produkt-Klassen (kommagetrennt, optional): "
 
 echo.
 echo --- SETUP-KONFIGURATION ---
-set /p setupfile="Setup-Datei (Pfad oder Enter fuer spaeter): "
+set /p setupfile="Setup-Datei (Pfad oder Enter für später): "
 
-set /p output="Ausgabe-Ordner (Enter fuer Desktop): "
+set /p output="Ausgabe-Ordner (Enter für Desktop): "
 if "%output%"=="" set output=%USERPROFILE%\Desktop
 
 set pkgdir=%output%\%pkgid%_%pkgversion%
@@ -183,7 +188,7 @@ if not "%setupfile%"=="" (
         if /i "!setupext!"==".exe" (
             set installertype=exe
             echo [AUTO] EXE-Installer erkannt
-            echo Pruefe Installer-Typ...
+            echo Prüfe Installer-Typ...
             findstr /i /c:"Inno Setup" "%setupfile%" >nul 2>&1
             if not errorlevel 1 (
                 set installertype=inno
@@ -196,18 +201,18 @@ if not "%setupfile%"=="" (
                     set silentparam=/S
                     echo [AUTO] NSIS erkannt - Silent: /S
                 ) else (
-                    echo [INFO] Standard EXE - Bitte Silent-Parameter manuell angeben falls noetig
-                    set /p silentparam="Silent-Parameter (Enter fuer keinen): "
+                    echo [INFO] Standard EXE - Bitte Silent-Parameter manuell angeben falls nötig
+                    set /p silentparam="Silent-Parameter (Enter für keinen): "
                 )
             )
         )
     ) else (
         echo WARNUNG: Setup-Datei nicht gefunden!
-        echo Sie koennen die Datei spaeter manuell in CLIENT_DATA\files\ kopieren.
+        echo Sie können die Datei später manuell in CLIENT_DATA\files\ kopieren.
     )
 ) else (
     echo [INFO] Keine Setup-Datei angegeben.
-    echo Sie koennen Dateien spaeter manuell in CLIENT_DATA\files\ kopieren.
+    echo Sie können Dateien später manuell in CLIENT_DATA\files\ kopieren.
 )
 
 REM Control-Datei mit erweiterten Metadaten erstellen
@@ -307,12 +312,12 @@ echo.
 echo Paket-Verzeichnis:
 echo %pkgdir%
 echo.
-echo Oeffne Explorer...
+echo Öffne Explorer...
 start explorer "%pkgdir%"
 echo.
 echo --- OPSI-SERVER VERBINDUNG ---
 echo.
-set /p connect="Moechten Sie sich mit dem OPSI-Server verbinden? (J/N): "
+set /p connect="Möchten Sie sich mit dem OPSI-Server verbinden? (J/N): "
 if /i NOT "%connect%"=="J" goto skip_ssh
 
 echo.
@@ -438,10 +443,10 @@ if /i "%readydeploy%"=="J" (
 
 if /i NOT "%readydeploy%"=="J" (
     echo.
-    echo Bitte kopieren Sie erst alle benoetigten Dateien nach:
+    echo Bitte kopieren Sie erst alle benötigten Dateien nach:
     echo %pkgdir%\CLIENT_DATA\
     echo.
-    echo Dann fuehren Sie diese Befehle manuell aus:
+    echo Dann führen Sie diese Befehle manuell aus:
     echo ----------------------------------------
     echo scp -r "%pkgdir%" %opsiuser%@%opsiserver%:/var/lib/opsi/workbench/
     echo ssh %opsiuser%@%opsiserver%
@@ -461,7 +466,7 @@ echo.
 scp -r "%pkgdir%" %opsiuser%@%opsiserver%:/var/lib/opsi/workbench/
 if errorlevel 1 (
     echo [FEHLER] Transfer fehlgeschlagen
-    echo Moeglicherweise fehlt SSH/SCP. Installation mit:
+    echo Möglicherweise fehlt SSH/SCP. Installation mit:
     echo   winget install OpenSSH.Client
     goto skip_ssh
 )
@@ -475,13 +480,13 @@ echo.
 echo Schritt 3/4: Installiere in OPSI...
 ssh %opsiuser%@%opsiserver% "opsi-package-manager -q -i /var/lib/opsi/workbench/%pkgid%_%pkgversion%-1.opsi"
 if errorlevel 1 (
-    echo [WARNUNG] Installation moeglicherweise fehlgeschlagen
+    echo [WARNUNG] Installation möglicherweise fehlgeschlagen
 ) else (
     echo [OK] Paket installiert
 )
 echo.
 
-echo Schritt 4/4: Pruefe Installation...
+echo Schritt 4/4: Prüfe Installation...
 ssh %opsiuser%@%opsiserver% "opsi-package-manager -l | grep -i %pkgid%"
 echo.
 
@@ -489,8 +494,8 @@ echo ==================================
 echo DEPLOYMENT ABGESCHLOSSEN!
 echo ==================================
 echo.
-echo Das Paket ist jetzt im OPSI-Configed verfuegbar.
-echo Sie koennen es den Clients zuweisen.
+echo Das Paket ist jetzt im OPSI-Configed verfügbar.
+echo Sie können es den Clients zuweisen.
 
 :skip_ssh
 
@@ -524,7 +529,7 @@ echo.
 set /p pkgupdate="Welches Paket aktualisieren? (Paket-ID eingeben): "
 
 echo.
-echo Pruefe ob Workbench-Ordner existiert...
+echo Prüfe ob Workbench-Ordner existiert...
 ssh %opsiuser%@%opsiserver% "if [ -d /var/lib/opsi/workbench/%pkgupdate%_* ]; then echo 'Workbench-Ordner gefunden'; else echo 'Kein Workbench-Ordner - kopiere vom Depot...'; cp -r /var/lib/opsi/depot/%pkgupdate% /var/lib/opsi/workbench/%pkgupdate%_update 2>/dev/null || echo '[WARNUNG] Depot-Ordner nicht gefunden'; fi"
 
 echo.
@@ -577,13 +582,13 @@ echo.
 echo === WORKBENCH PROJEKTE (nicht installiert) ===
 ssh %opsiuser%@%opsiserver% "cd /var/lib/opsi/workbench && for dir in */; do pkg=${dir%/}; pkgid=${pkg%%_*}; opsi-package-manager -l | grep -q \"^   $pkgid \" || echo $pkg; done 2>/dev/null"
 echo.
-set /p pkgdelete="Paket-ID oder Workbench-Ordner zum Loeschen: "
+set /p pkgdelete="Paket-ID oder Workbench-Ordner zum Löschen: "
 
 echo.
 echo WARNUNG: Paket '%pkgdelete%' wird komplett entfernt!
 echo.
-echo Loeschoptionen:
-echo [1] Normal loeschen (empfohlen)
+echo Löschoptionen:
+echo [1] Normal löschen (empfohlen)
 echo [2] Mit --purge (entfernt auch alle Client-Zuordnungen)
 echo [3] Abbrechen
 echo.
@@ -607,35 +612,35 @@ if "%pkgid%"=="" set pkgid=%pkgdelete%
 echo Paket-ID: %pkgid%
 
 echo.
-echo Pruefe ob Paket installiert ist...
+echo Prüfe ob Paket installiert ist...
 ssh %opsiuser%@%opsiserver% "opsi-package-manager -l | grep -q \"   %pkgid% \" && echo '[INFO] Paket ist installiert' || echo '[INFO] Nur in Workbench vorhanden'"
 
 if "%deleteoption%"=="1" (
-    echo Loesche Paket '%pkgid%' ...
+    echo Lösche Paket '%pkgid%' ...
     ssh %opsiuser%@%opsiserver% "TERM=dumb opsi-package-manager -q -r %pkgid% 2>/dev/null"
     if errorlevel 1 (
-        echo [INFO] Paket nicht installiert oder Fehler beim Loeschen
+        echo [INFO] Paket nicht installiert oder Fehler beim Löschen
     ) else (
         echo [OK] Paket aus OPSI entfernt
     )
 ) else if "%deleteoption%"=="2" (
-    echo Loesche Paket '%pkgid%' mit --purge ...
+    echo Lösche Paket '%pkgid%' mit --purge ...
     ssh %opsiuser%@%opsiserver% "TERM=dumb opsi-package-manager -q -r %pkgid% --purge 2>/dev/null"
     if errorlevel 1 (
-        echo [INFO] Paket nicht installiert oder Fehler beim Loeschen
+        echo [INFO] Paket nicht installiert oder Fehler beim Löschen
     ) else (
         echo [OK] Paket aus OPSI entfernt (inkl. Client-Zuordnungen)
     )
 )
 
 echo.
-echo Raeume Workbench und Repository auf...
+echo Räume Workbench und Repository auf...
 ssh %opsiuser%@%opsiserver% "cd /var/lib/opsi/workbench && rm -rf '%pkgid%' '%pkgid%'_* '%pkgid%'.opsi* '%pkgdelete%' '%pkgdelete%'.opsi* 2>/dev/null; echo '[OK] Workbench bereinigt'"
 ssh %opsiuser%@%opsiserver% "cd /var/lib/opsi/repository && rm -rf '%pkgid%'* 2>/dev/null; echo '[OK] Repository bereinigt'"
 ssh %opsiuser%@%opsiserver% "cd /var/lib/opsi/depot && rm -rf '%pkgid%' 2>/dev/null; echo '[OK] Depot bereinigt'"
 
 echo.
-echo Pruefe ob Paket entfernt wurde...
+echo Prüfe ob Paket entfernt wurde...
 ssh %opsiuser%@%opsiserver% "opsi-package-manager -l | grep -q -i '%pkgid%'"
 if errorlevel 1 (
     echo [OK] Paket '%pkgid%' erfolgreich entfernt!
@@ -662,13 +667,13 @@ rm -rf /var/lib/opsi/depot/%pkgid% 2>/dev/null; \
 opsiconfd reload 2>/dev/null; \
 echo '=== DONE ==='"
 
-echo Finale Pruefung...
+echo Finale Prüfung...
 ssh %opsiuser%@%opsiserver% "opsi-package-manager -l | grep -q -i '%pkgid%'"
 if errorlevel 1 (
     echo [OK] Paket '%pkgid%' erfolgreich entfernt!
 ) else (
     echo [FEHLER] Paket '%pkgid%' konnte nicht entfernt werden!
-    echo Bitte manuell auf dem Server pruefen.
+    echo Bitte manuell auf dem Server prüfen.
 )
 
 echo.
@@ -711,9 +716,9 @@ echo === ERWEITERTE OPTIONEN ===
 echo.
 echo [1] SSH-Key einrichten
 echo [2] Server-Logs anzeigen
-echo [3] Client-Status pruefen
+echo [3] Client-Status prüfen
 echo [4] Depot synchronisieren
-echo [5] Zurueck zum Hauptmenue
+echo [5] Zurück zum Hauptmenue
 echo.
 set /p advchoice="Ihre Wahl: "
 
@@ -726,7 +731,7 @@ if "%advchoice%"=="1" (
     set /p opsiuser="SSH-Benutzer (Enter = root): "
     if "!opsiuser!"=="" set opsiuser=root
     echo.
-    echo Schritt 1/4: Pruefe ob SSH-Key existiert...
+    echo Schritt 1/4: Prüfe ob SSH-Key existiert...
     if exist "%USERPROFILE%\.ssh\id_rsa.pub" (
         echo [OK] SSH-Key bereits vorhanden
     ) else (
@@ -754,7 +759,7 @@ if "%advchoice%"=="1" (
     echo [OK] Server erreichbar
     echo.
     echo Schritt 3/4: Kopiere Public-Key auf Server...
-    echo [INFO] Sie werden nach dem Passwort fuer !opsiuser!@!opsiserver! gefragt
+    echo [INFO] Sie werden nach dem Passwort für !opsiuser!@!opsiserver! gefragt
     echo.
     type "%USERPROFILE%\.ssh\id_rsa.pub" | ssh !opsiuser!@!opsiserver! "mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
     if errorlevel 1 (
@@ -767,14 +772,14 @@ if "%advchoice%"=="1" (
     echo Schritt 4/4: Teste passwortlose Verbindung...
     ssh -o BatchMode=yes -o ConnectTimeout=5 !opsiuser!@!opsiserver! "echo SSH-Verbindung erfolgreich"
     if errorlevel 1 (
-        echo [WARNUNG] Passwortlose Verbindung noch nicht moeglich
-        echo Versuchen Sie es erneut oder pruefen Sie die Server-Konfiguration
+        echo [WARNUNG] Passwortlose Verbindung noch nicht möglich
+        echo Versuchen Sie es erneut oder prüfen Sie die Server-Konfiguration
     ) else (
         echo.
         echo ====================================
         echo SSH-KEY SETUP ERFOLGREICH!
         echo ====================================
-        echo Sie koennen sich jetzt ohne Passwort verbinden.
+        echo Sie können sich jetzt ohne Passwort verbinden.
     )
     echo.
     pause
@@ -849,7 +854,7 @@ echo.
 echo FUNKTIONEN:
 echo -----------
 echo [1] Neues Paket erstellen
-echo     - Vollstaendige Metadaten-Unterstuetzung
+echo     - Vollständige Metadaten-Unterstützung
 echo     - Automatische Silent-Parameter Erkennung
 echo     - Multi-Datei Support
 echo.
@@ -858,9 +863,9 @@ echo     - Setup-Dateien ersetzen
 echo     - Versionierung
 echo     - Live-Update im Depot
 echo.
-echo [3] Paket loeschen
+echo [3] Paket löschen
 echo     - Sichere Entfernung vom Server
-echo     - Client-Pruefung
+echo     - Client-Prüfung
 echo.
 echo [4] Server-Pakete anzeigen
 echo     - Installierte Pakete
@@ -874,7 +879,7 @@ echo     - Depot-Sync
 echo.
 echo TIPPS:
 echo ------
-echo - SSH-Keys einrichten fuer passwortlosen Zugriff
+echo - SSH-Keys einrichten für passwortlosen Zugriff
 echo - Setup-Dateien immer in CLIENT_DATA/files/ platzieren
 echo - Versionsnummern im Format X.Y.Z verwenden
 echo.
@@ -885,12 +890,12 @@ pause
 goto menu
 '@
         
-        $batchScript | Out-File -FilePath "$appPath\opsi_packforge.bat" -Encoding ASCII
+        $batchScript | Out-File -FilePath "$appPath\opsi_packforge.bat" -Encoding UTF8
         Write-Host "OK - Anwendung erstellt" -ForegroundColor Green
         Write-Host ""
         
         # Schritt 5
-        Write-Host "Schritt 5: Erstelle Desktop-Verknuepfung..." -ForegroundColor Yellow
+        Write-Host "Schritt 5: Erstelle Desktop-Verknüpfung..." -ForegroundColor Yellow
         try {
             $desktopPath = [Environment]::GetFolderPath("Desktop")
             if (-not $desktopPath) {
@@ -903,9 +908,9 @@ goto menu
             $Shortcut.WorkingDirectory = $appPath
             $Shortcut.Description = "OPSI PackForge"
             $Shortcut.Save()
-            Write-Host "OK - Desktop-Verknuepfung erstellt" -ForegroundColor Green
+            Write-Host "OK - Desktop-Verknüpfung erstellt" -ForegroundColor Green
         } catch {
-            Write-Host "WARNUNG: Desktop-Verknuepfung konnte nicht erstellt werden" -ForegroundColor Yellow
+            Write-Host "WARNUNG: Desktop-Verknüpfung konnte nicht erstellt werden" -ForegroundColor Yellow
             Write-Host "         Starten Sie die Anwendung manuell:" -ForegroundColor Yellow
             Write-Host "         $appPath\opsi_packforge.bat" -ForegroundColor Cyan
         }
@@ -915,11 +920,11 @@ goto menu
         Write-Host "Installiert in: $installPath" -ForegroundColor Cyan
         Write-Host ""
         Write-Host "Starten mit:" -ForegroundColor Yellow
-        Write-Host "- Desktop-Verknuepfung 'OPSI PackForge'" -ForegroundColor White
+        Write-Host "- Desktop-Verknüpfung 'OPSI PackForge'" -ForegroundColor White
         Write-Host "- Oder direkt: $appPath\opsi_packforge.bat" -ForegroundColor White
         Write-Host ""
         
-        $startNow = Read-Host "Moechten Sie OPSI PackForge jetzt starten? (J/N)"
+        $startNow = Read-Host "Möchten Sie OPSI PackForge jetzt starten? (J/N)"
         if ($startNow -eq "J" -or $startNow -eq "j") {
             Start-Process "$appPath\opsi_packforge.bat"
         }
@@ -931,10 +936,10 @@ goto menu
     }
     
     default {
-        Write-Host "Ungueltige Auswahl!" -ForegroundColor Red
+        Write-Host "Ungültige Auswahl!" -ForegroundColor Red
     }
 }
 
 Write-Host ""
-Write-Host "Druecken Sie eine beliebige Taste zum Beenden..." -ForegroundColor Yellow
+Write-Host "Drücken Sie eine beliebige Taste zum Beenden..." -ForegroundColor Yellow
 $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
