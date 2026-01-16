@@ -637,9 +637,9 @@ echo === REGISTRIERTE CLIENTS ===
 ssh %opsiuser%@%opsiserver% opsi-admin -d method host_getIdents
 if errorlevel 1 echo [FEHLER] Konnte Clients nicht abrufen
 echo.
-echo === ERREICHBARKEIT PRUEFEN ===
-ssh %opsiuser%@%opsiserver% opsi-admin -d method hostControl_reachable
-if errorlevel 1 echo [FEHLER] Konnte Erreichbarkeit nicht pruefen
+echo === ERREICHBARE CLIENTS ===
+ssh %opsiuser%@%opsiserver% "opsi-admin -d method hostControl_reachable | grep true"
+if errorlevel 1 echo [INFO] Keine erreichbaren Clients gefunden
 echo.
 echo Fertig.
 pause
