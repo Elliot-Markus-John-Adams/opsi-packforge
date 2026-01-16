@@ -644,25 +644,25 @@ if errorlevel 1 (
     goto menu
 )
 
-echo [INFO] Paket noch vorhanden - versuche mit --purge...
-ssh %opsiuser%@%opsiserver% "TERM=dumb opsi-package-manager -q -r %pkgid% --purge 2>/dev/null"
+echo [INFO] Paket noch vorhanden - entferne alle Referenzen...
 
-echo Raeume nochmal auf...
-ssh %opsiuser%@%opsiserver% "cd /var/lib/opsi/workbench && rm -rf '%pkgid%' '%pkgid%'_* '%pkgid%'.opsi* '%pkgdelete%' '%pkgdelete%'.opsi* 2>/dev/null"
-ssh %opsiuser%@%opsiserver% "cd /var/lib/opsi/repository && rm -rf '%pkgid%'* 2>/dev/null"
-ssh %opsiuser%@%opsiserver% "cd /var/lib/opsi/depot && rm -rf '%pkgid%' 2>/dev/null"
+echo Entferne Client-Zuordnungen...
+ssh %opsiuser%@%opsiserver% "opsi-admin -d method productOnClient_deleteObjects '[]' '{\"productId\":\"%pkgid%\"}' 2>/dev/null; opsi-admin -d task cleanupProducts 2>/dev/null"
 
-echo Pruefe erneut...
-ssh %opsiuser%@%opsiserver% "opsi-package-manager -l | grep -q -i '%pkgid%'"
-if errorlevel 1 (
-    echo [OK] Paket '%pkgid%' erfolgreich entfernt!
-    echo.
-    pause
-    goto menu
-)
+echo Entferne Depot-Eintraege...
+ssh %opsiuser%@%opsiserver% "opsi-admin -d method productOnDepot_deleteObjects '[]' '{\"productId\":\"%pkgid%\"}' 2>/dev/null"
 
-echo [INFO] Paket noch in DB - entferne direkt aus Datenbank...
-ssh %opsiuser%@%opsiserver% "opsi-admin -d method product_delete '%pkgid%' 2>/dev/null"
+echo Versuche --purge...
+ssh %opsiuser%@%opsiserver% "TERM=dumb opsi-package-manager -q -r '%pkgid%' --purge 2>/dev/null"
+
+echo Entferne Produkt aus Datenbank...
+ssh %opsiuser%@%opsiserver% "opsi-admin -d method product_deleteObjects '[]' '{\"id\":\"%pkgid%\"}' 2>/dev/null"
+
+echo Raeume Dateisystem auf...
+ssh %opsiuser%@%opsiserver% "rm -rf /var/lib/opsi/workbench/%pkgid%* /var/lib/opsi/workbench/%pkgdelete%* /var/lib/opsi/repository/%pkgid%* /var/lib/opsi/depot/%pkgid% 2>/dev/null"
+
+echo Aktualisiere OPSI-Backend...
+ssh %opsiuser%@%opsiserver% "opsi-package-updater -v list >/dev/null 2>&1; opsiconfd reload 2>/dev/null"
 
 echo Finale Pruefung...
 ssh %opsiuser%@%opsiserver% "opsi-package-manager -l | grep -q -i '%pkgid%'"
