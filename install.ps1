@@ -609,11 +609,17 @@ if "%advchoice%"=="2" (
 
 if "%advchoice%"=="3" (
     set /p opsiserver="OPSI-Server (Enter = 10.1.0.2): "
-    if "%opsiserver%"=="" set opsiserver=10.1.0.2
+    if "!opsiserver!"=="" set opsiserver=10.1.0.2
     set /p opsiuser="SSH-Benutzer (Enter = root): "
-    if "%opsiuser%"=="" set opsiuser=root
-    ssh %opsiuser%@%opsiserver% "opsi-admin -d method getClientIds"
+    if "!opsiuser!"=="" set opsiuser=root
+    echo.
+    echo === REGISTRIERTE CLIENTS ===
+    ssh !opsiuser!@!opsiserver! "opsi-admin -d method host_getIdents '[]' '{\"type\":\"OpsiClient\"}'"
+    echo.
+    echo === CLIENT-STATUS (letzte Aktivitaet) ===
+    ssh !opsiuser!@!opsiserver! "opsi-admin -d method hostControl_getActiveSessions '*' 2>/dev/null || echo 'Keine aktiven Sessions'"
     pause
+    goto advanced
 )
 
 if "%advchoice%"=="4" (
