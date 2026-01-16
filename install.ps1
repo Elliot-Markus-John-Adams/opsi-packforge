@@ -634,8 +634,8 @@ echo.
 echo === REGISTRIERTE CLIENTS ===
 ssh %opsiuser%@%opsiserver% "opsi-admin -d method host_getIdents '[]' '{\"type\":\"OpsiClient\"}'"
 echo.
-echo === ERREICHBARE CLIENTS (RDP/Port 3389) ===
-ssh %opsiuser%@%opsiserver% "for client in $(opsi-admin -d method host_getIdents '[]' '{\"type\":\"OpsiClient\"}' 2>/dev/null | tr -d '\"[],' | tr ' ' '\n' | grep -v '^$'); do ip=$(getent hosts $client 2>/dev/null | awk '{print $1}'); if [ -n \"$ip\" ]; then timeout 1 bash -c \"echo >/dev/tcp/$ip/3389\" 2>/dev/null && echo \"[RDP OK] $client ($ip)\" || echo \"[OFFLINE] $client ($ip)\"; else echo \"[NO DNS] $client\"; fi; done"
+echo === ERREICHBARKEIT PRUEFEN (Ping) ===
+ssh %opsiuser%@%opsiserver% "opsi-admin -d method hostControl_reachable '*'"
 echo.
 echo === AKTIVE SESSIONS ===
 ssh %opsiuser%@%opsiserver% "opsi-admin -d method hostControl_getActiveSessions '*' 2>/dev/null || echo 'Keine aktiven Sessions'"
