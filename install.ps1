@@ -644,25 +644,23 @@ if errorlevel 1 (
     goto menu
 )
 
-echo [INFO] Paket noch vorhanden - entferne alle Referenzen...
+echo [INFO] Paket noch vorhanden - AGGRESSIVES LOESCHEN...
+echo.
 
-echo Entferne Client-Zuordnungen...
-ssh %opsiuser%@%opsiserver% "opsi-admin -d method productOnClient_deleteObjects '[]' '{\"productId\":\"%pkgid%\"}' 2>/dev/null; opsi-admin -d task cleanupProducts 2>/dev/null"
-
-echo Entferne Depot-Eintraege...
-ssh %opsiuser%@%opsiserver% "opsi-admin -d method productOnDepot_deleteObjects '[]' '{\"productId\":\"%pkgid%\"}' 2>/dev/null"
-
-echo Versuche --purge...
-ssh %opsiuser%@%opsiserver% "TERM=dumb opsi-package-manager -q -r '%pkgid%' --purge 2>/dev/null"
-
-echo Entferne Produkt aus Datenbank...
-ssh %opsiuser%@%opsiserver% "opsi-admin -d method product_deleteObjects '[]' '{\"id\":\"%pkgid%\"}' 2>/dev/null"
-
-echo Raeume Dateisystem auf...
-ssh %opsiuser%@%opsiserver% "rm -rf /var/lib/opsi/workbench/%pkgid%* /var/lib/opsi/workbench/%pkgdelete%* /var/lib/opsi/repository/%pkgid%* /var/lib/opsi/depot/%pkgid% 2>/dev/null"
-
-echo Aktualisiere OPSI-Backend...
-ssh %opsiuser%@%opsiserver% "opsi-package-updater -v list >/dev/null 2>&1; opsiconfd reload 2>/dev/null"
+ssh %opsiuser%@%opsiserver% "echo '=== LOESCHE ALLES FUER %pkgid% ===' && \
+opsi-admin -d method productOnClient_delete '*' '%pkgid%' 2>/dev/null; \
+opsi-admin -d method productPropertyState_delete '*' '%pkgid%' '*' 2>/dev/null; \
+opsi-admin -d method productDependency_delete '%pkgid%' '*' '*' '*' '*' 2>/dev/null; \
+opsi-admin -d method productProperty_delete '%pkgid%' '*' '*' 2>/dev/null; \
+opsi-admin -d method productOnDepot_delete '%pkgid%' '*' 2>/dev/null; \
+opsi-admin -d method product_delete '%pkgid%' 2>/dev/null; \
+opsi-package-manager -r '%pkgid%' --purge 2>/dev/null; \
+opsi-package-manager -r '%pkgid%' 2>/dev/null; \
+rm -rf /var/lib/opsi/workbench/%pkgid%* /var/lib/opsi/workbench/%pkgdelete%* 2>/dev/null; \
+rm -rf /var/lib/opsi/repository/%pkgid%* 2>/dev/null; \
+rm -rf /var/lib/opsi/depot/%pkgid% 2>/dev/null; \
+opsiconfd reload 2>/dev/null; \
+echo '=== DONE ==='"
 
 echo Finale Pruefung...
 ssh %opsiuser%@%opsiserver% "opsi-package-manager -l | grep -q -i '%pkgid%'"
