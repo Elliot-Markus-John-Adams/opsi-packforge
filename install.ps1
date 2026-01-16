@@ -607,20 +607,7 @@ if "%advchoice%"=="2" (
     pause
 )
 
-if "%advchoice%"=="3" (
-    set /p opsiserver="OPSI-Server (Enter = 10.1.0.2): "
-    if "!opsiserver!"=="" set opsiserver=10.1.0.2
-    set /p opsiuser="SSH-Benutzer (Enter = root): "
-    if "!opsiuser!"=="" set opsiuser=root
-    echo.
-    echo === REGISTRIERTE CLIENTS ===
-    ssh !opsiuser!@!opsiserver! "opsi-admin -d method host_getIdents '[]' '{\"type\":\"OpsiClient\"}'"
-    echo.
-    echo === CLIENT-STATUS (letzte Aktivitaet) ===
-    ssh !opsiuser!@!opsiserver! "opsi-admin -d method hostControl_getActiveSessions '*' 2>/dev/null || echo 'Keine aktiven Sessions'"
-    pause
-    goto advanced
-)
+if "%advchoice%"=="3" goto clientstatus
 
 if "%advchoice%"=="4" (
     set /p opsiserver="OPSI-Server (Enter = 10.1.0.2): "
@@ -633,6 +620,28 @@ if "%advchoice%"=="4" (
 )
 
 goto menu
+
+:clientstatus
+cls
+echo.
+echo === CLIENT-STATUS PRUEFEN ===
+echo.
+set /p opsiserver="OPSI-Server (Enter = 10.1.0.2): "
+if "%opsiserver%"=="" set opsiserver=10.1.0.2
+set /p opsiuser="SSH-Benutzer (Enter = root): "
+if "%opsiuser%"=="" set opsiuser=root
+echo.
+echo === REGISTRIERTE CLIENTS ===
+ssh %opsiuser%@%opsiserver% "opsi-admin -d method host_getIdents '[]' '{\"type\":\"OpsiClient\"}'"
+echo.
+echo === ERREICHBARE CLIENTS (RDP/Port 3389) ===
+ssh %opsiuser%@%opsiserver% "for client in $(opsi-admin -d method host_getIdents '[]' '{\"type\":\"OpsiClient\"}' 2>/dev/null | tr -d '\"[],' | tr ' ' '\n' | grep -v '^$'); do ip=$(getent hosts $client 2>/dev/null | awk '{print $1}'); if [ -n \"$ip\" ]; then timeout 1 bash -c \"echo >/dev/tcp/$ip/3389\" 2>/dev/null && echo \"[RDP OK] $client ($ip)\" || echo \"[OFFLINE] $client ($ip)\"; else echo \"[NO DNS] $client\"; fi; done"
+echo.
+echo === AKTIVE SESSIONS ===
+ssh %opsiuser%@%opsiserver% "opsi-admin -d method hostControl_getActiveSessions '*' 2>/dev/null || echo 'Keine aktiven Sessions'"
+echo.
+pause
+goto advanced
 
 :help
 cls
