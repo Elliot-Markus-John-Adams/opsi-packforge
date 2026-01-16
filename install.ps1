@@ -82,6 +82,7 @@ switch ($choice) {
         # Erstelle das Haupt-Script
         $batchScript = @'
 @echo off
+setlocal enabledelayedexpansion
 title OPSI PackForge v2.0
 color 0A
 
@@ -311,7 +312,7 @@ echo [OK] Paket auf Server kopiert
 echo.
 
 echo Schritt 2/4: Baue OPSI-Paket...
-ssh %opsiuser%@%opsiserver% "cd /var/lib/opsi/workbench && rm -f %pkgid%_%pkgversion%-*.opsi 2>/dev/null; opsi-makepackage --no-interactive %pkgid%_%pkgversion%"
+ssh %opsiuser%@%opsiserver% "cd /var/lib/opsi/workbench && rm -f %pkgid%_%pkgversion%-*.opsi 2>/dev/null; opsi-makepackage %pkgid%_%pkgversion%"
 echo.
 
 echo Schritt 3/4: Installiere in OPSI...
@@ -391,7 +392,7 @@ if "%updatetype%"=="1" (
 
 echo.
 echo Suche Workbench-Ordner und baue Paket neu...
-ssh %opsiuser%@%opsiserver% "pkgdir=$(find /var/lib/opsi/workbench -maxdepth 2 -name '%pkgupdate%*' -type d | head -1); if [ -n \"$pkgdir\" ]; then cd \"$pkgdir\" && cd .. && opsi-makepackage --no-interactive \"$(basename $pkgdir)\"; else echo '[FEHLER] Kein Workbench-Ordner gefunden'; fi"
+ssh %opsiuser%@%opsiserver% "pkgdir=$(find /var/lib/opsi/workbench -maxdepth 2 -name '%pkgupdate%*' -type d | head -1); if [ -n \"$pkgdir\" ]; then cd \"$pkgdir\" && cd .. && opsi-makepackage \"$(basename $pkgdir)\"; else echo '[FEHLER] Kein Workbench-Ordner gefunden'; fi"
 echo.
 echo Installiere aktualisiertes Paket...
 ssh %opsiuser%@%opsiserver% "latest=$(ls -t /var/lib/opsi/workbench/%pkgupdate%*.opsi 2>/dev/null | head -1); if [ -n \"$latest\" ]; then opsi-package-manager -q -i \"$latest\"; else echo '[FEHLER] Kein Paket gefunden'; fi"
@@ -524,11 +525,66 @@ set /p advchoice="Ihre Wahl: "
 
 if "%advchoice%"=="1" (
     echo.
-    echo SSH-Key Setup:
-    echo 1. Fuehren Sie aus: ssh-keygen -t rsa -b 4096
-    echo 2. Dann: ssh-copy-id root@10.1.0.2
-    echo 3. Testen mit: ssh root@10.1.0.2
+    echo === AUTOMATISCHES SSH-KEY SETUP ===
+    echo.
+    set /p opsiserver="OPSI-Server (Enter = 10.1.0.2): "
+    if "!opsiserver!"=="" set opsiserver=10.1.0.2
+    set /p opsiuser="SSH-Benutzer (Enter = root): "
+    if "!opsiuser!"=="" set opsiuser=root
+    echo.
+    echo Schritt 1/4: Pruefe ob SSH-Key existiert...
+    if exist "%USERPROFILE%\.ssh\id_rsa.pub" (
+        echo [OK] SSH-Key bereits vorhanden
+    ) else (
+        echo [INFO] Kein SSH-Key gefunden - erstelle neuen Key...
+        echo.
+        if not exist "%USERPROFILE%\.ssh" mkdir "%USERPROFILE%\.ssh"
+        ssh-keygen -t rsa -b 4096 -f "%USERPROFILE%\.ssh\id_rsa" -N ""
+        if errorlevel 1 (
+            echo [FEHLER] Key-Generierung fehlgeschlagen
+            echo Stellen Sie sicher dass OpenSSH installiert ist:
+            echo   winget install Microsoft.OpenSSH.Client
+            pause
+            goto advanced
+        )
+        echo [OK] SSH-Key erstellt
+    )
+    echo.
+    echo Schritt 2/4: Teste Server-Erreichbarkeit...
+    ping -n 1 !opsiserver! >nul 2>&1
+    if errorlevel 1 (
+        echo [FEHLER] Server !opsiserver! nicht erreichbar!
+        pause
+        goto advanced
+    )
+    echo [OK] Server erreichbar
+    echo.
+    echo Schritt 3/4: Kopiere Public-Key auf Server...
+    echo [INFO] Sie werden nach dem Passwort fuer !opsiuser!@!opsiserver! gefragt
+    echo.
+    type "%USERPROFILE%\.ssh\id_rsa.pub" | ssh !opsiuser!@!opsiserver! "mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
+    if errorlevel 1 (
+        echo [FEHLER] Key-Kopie fehlgeschlagen
+        pause
+        goto advanced
+    )
+    echo [OK] Public-Key auf Server kopiert
+    echo.
+    echo Schritt 4/4: Teste passwortlose Verbindung...
+    ssh -o BatchMode=yes -o ConnectTimeout=5 !opsiuser!@!opsiserver! "echo SSH-Verbindung erfolgreich"
+    if errorlevel 1 (
+        echo [WARNUNG] Passwortlose Verbindung noch nicht moeglich
+        echo Versuchen Sie es erneut oder pruefen Sie die Server-Konfiguration
+    ) else (
+        echo.
+        echo ====================================
+        echo SSH-KEY SETUP ERFOLGREICH!
+        echo ====================================
+        echo Sie koennen sich jetzt ohne Passwort verbinden.
+    )
+    echo.
     pause
+    goto advanced
 )
 
 if "%advchoice%"=="2" (
