@@ -626,17 +626,22 @@ cls
 echo.
 echo === CLIENT-STATUS PRUEFEN ===
 echo.
-set /p opsiserver="OPSI-Server (Enter = 10.1.0.2): "
-if "%opsiserver%"=="" set opsiserver=10.1.0.2
-set /p opsiuser="SSH-Benutzer (Enter = root): "
-if "%opsiuser%"=="" set opsiuser=root
+set opsiserver=10.1.0.2
+set opsiuser=root
+set /p opsiserver="OPSI-Server [%opsiserver%]: "
+set /p opsiuser="SSH-Benutzer [%opsiuser%]: "
+echo.
+echo Verbinde mit %opsiuser%@%opsiserver%...
 echo.
 echo === REGISTRIERTE CLIENTS ===
 ssh %opsiuser%@%opsiserver% opsi-admin -d method host_getIdents
+if errorlevel 1 echo [FEHLER] Konnte Clients nicht abrufen
 echo.
 echo === ERREICHBARKEIT PRUEFEN ===
 ssh %opsiuser%@%opsiserver% opsi-admin -d method hostControl_reachable
+if errorlevel 1 echo [FEHLER] Konnte Erreichbarkeit nicht pruefen
 echo.
+echo Fertig.
 pause
 goto advanced
 
