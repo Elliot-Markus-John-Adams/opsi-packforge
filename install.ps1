@@ -632,13 +632,10 @@ set /p opsiuser="SSH-Benutzer (Enter = root): "
 if "%opsiuser%"=="" set opsiuser=root
 echo.
 echo === REGISTRIERTE CLIENTS ===
-ssh %opsiuser%@%opsiserver% "opsi-admin -d method host_getIdents '[]' '{\"type\":\"OpsiClient\"}'"
+ssh %opsiuser%@%opsiserver% opsi-admin -d method host_getIdents
 echo.
-echo === ERREICHBARKEIT PRUEFEN (Ping) ===
-ssh %opsiuser%@%opsiserver% "opsi-admin -d method hostControl_reachable '*'"
-echo.
-echo === AKTIVE SESSIONS ===
-ssh %opsiuser%@%opsiserver% "opsi-admin -d method hostControl_getActiveSessions '*' 2>/dev/null || echo 'Keine aktiven Sessions'"
+echo === ERREICHBARKEIT PRUEFEN ===
+ssh %opsiuser%@%opsiserver% opsi-admin -d method hostControl_reachable
 echo.
 pause
 goto advanced
