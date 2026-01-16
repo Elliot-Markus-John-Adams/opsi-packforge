@@ -21,12 +21,10 @@ Write-Host "====================================" -ForegroundColor Cyan
 Write-Host ""
 
 Write-Host "[1] Installation starten" -ForegroundColor Yellow
-Write-Host "[2] Test-Modus" -ForegroundColor Yellow
-Write-Host "[3] Hilfe" -ForegroundColor Yellow
-Write-Host "[4] Beenden" -ForegroundColor Yellow
+Write-Host "[2] Beenden" -ForegroundColor Yellow
 Write-Host ""
 
-$choice = Read-Host "Bitte waehlen Sie eine Option (1-4)"
+$choice = Read-Host "Bitte waehlen Sie eine Option (1-2)"
 
 switch ($choice) {
     "1" {
@@ -732,31 +730,6 @@ goto menu
     }
     
     "2" {
-        Write-Host ""
-        Write-Host "TEST-MODUS" -ForegroundColor Yellow
-        Write-Host "----------" -ForegroundColor Yellow
-        Write-Host "Wuerde folgende Aktionen ausfuehren:" -ForegroundColor White
-        Write-Host "- Verzeichnis erstellen: $env:LOCALAPPDATA\OPSI-PackForge" -ForegroundColor Gray
-        Write-Host "- Python herunterladen (15 MB)" -ForegroundColor Gray
-        Write-Host "- GUI-Anwendung erstellen" -ForegroundColor Gray
-        Write-Host ""
-    }
-    
-    "3" {
-        Write-Host ""
-        Write-Host "HILFE" -ForegroundColor Yellow
-        Write-Host "-----" -ForegroundColor Yellow
-        Write-Host "Dieses Script installiert OPSI PackForge auf Ihrem System." -ForegroundColor White
-        Write-Host ""
-        Write-Host "Optionen:" -ForegroundColor White
-        Write-Host "1 - Vollstaendige Installation" -ForegroundColor Gray
-        Write-Host "2 - Test ohne echte Installation" -ForegroundColor Gray
-        Write-Host "3 - Diese Hilfe" -ForegroundColor Gray
-        Write-Host "4 - Beenden" -ForegroundColor Gray
-        Write-Host ""
-    }
-    
-    "4" {
         Write-Host "Beende..." -ForegroundColor Yellow
         exit
     }
