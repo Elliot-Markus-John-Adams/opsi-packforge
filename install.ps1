@@ -634,11 +634,11 @@ if "%deleteoption%"=="1" (
 
 echo.
 echo Cleaning up workbench and repository...
-ssh %opsiuser%@%opsiserver% "cd /var/lib/opsi/workbench && rm -rf '%pkgid%' '%pkgid%'_* '%pkgid%'.opsi* '%pkgdelete%' '%pkgdelete%'.opsi* 2>/dev/null; echo '[OK] Workbench cleaned'; cd /var/lib/opsi/repository && rm -rf '%pkgid%'* 2>/dev/null; echo '[OK] Repository cleaned'; cd /var/lib/opsi/depot && rm -rf '%pkgid%' 2>/dev/null; echo '[OK] Depot cleaned'"
+ssh -o ConnectTimeout=10 -o ServerAliveInterval=5 %opsiuser%@%opsiserver% "rm -rf /var/lib/opsi/workbench/'%pkgid%'* /var/lib/opsi/workbench/'%pkgdelete%'* /var/lib/opsi/repository/'%pkgid%'* /var/lib/opsi/depot/'%pkgid%' 2>/dev/null; echo '[OK] Cleanup complete'"
 
 echo.
 echo Checking if package was removed...
-ssh %opsiuser%@%opsiserver% "opsi-package-manager -l | grep -q -i '%pkgid%'"
+ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "opsi-package-manager -l | grep -q -i '%pkgid%'"
 if errorlevel 1 (
     echo [OK] Package '%pkgid%' successfully removed!
     echo.
