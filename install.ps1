@@ -874,44 +874,7 @@ if "%advchoice%"=="4" (
     pause
 )
 
-if "%advchoice%"=="5" (
-    echo.
-    echo === WAKE ON LAN ===
-    echo.
-    set /p opsiserver="OPSI Server (Enter = 10.1.0.2): "
-    if "!opsiserver!"=="" set opsiserver=10.1.0.2
-    set /p opsiuser="SSH User (Enter = root): "
-    if "!opsiuser!"=="" set opsiuser=root
-    echo.
-    echo Fetching client list...
-    ssh -o ConnectTimeout=10 !opsiuser!@!opsiserver! "opsi-admin -d method host_getIdents 2>/dev/null | grep -v '^\[' | grep -v '^\]' | tr -d '\",' | tr -d ' '"
-    echo.
-    echo [1] Wake single client
-    echo [2] Wake all clients
-    echo [3] Cancel
-    echo.
-    set /p wolchoice="Your choice: "
-    if "!wolchoice!"=="1" (
-        set /p wolclient="Enter client FQDN: "
-        echo.
-        echo Sending WOL packet to !wolclient!...
-        ssh -o ConnectTimeout=10 !opsiuser!@!opsiserver! "opsi-admin -d method hostControl_start '!wolclient!'"
-        if errorlevel 1 (
-            echo [ERROR] WOL failed
-        ) else (
-            echo [OK] WOL packet sent to !wolclient!
-        )
-    )
-    if "!wolchoice!"=="2" (
-        echo.
-        echo Waking all clients...
-        ssh -o ConnectTimeout=10 !opsiuser!@!opsiserver! "opsi-wakeup-clients 2>/dev/null || opsi-admin -d method hostControl_start"
-        echo [OK] WOL packets sent
-    )
-    echo.
-    pause
-    goto advanced
-)
+if "%advchoice%"=="5" goto wakeonlan
 
 if "%advchoice%"=="6" goto menu
 
@@ -938,6 +901,50 @@ ssh -o ConnectTimeout=10 -o ServerAliveInterval=5 %opsiuser%@%opsiserver% "opsi-
 if errorlevel 1 echo [INFO] No reachable clients found
 echo.
 echo Done.
+pause
+goto advanced
+
+:wakeonlan
+cls
+echo.
+echo === WAKE ON LAN ===
+echo.
+set opsiserver=10.1.0.2
+set opsiuser=root
+set /p opsiserver="OPSI Server [%opsiserver%]: "
+set /p opsiuser="SSH User [%opsiuser%]: "
+echo.
+echo Fetching client list...
+ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "opsi-admin -d method host_getIdents"
+echo.
+echo [1] Wake single client
+echo [2] Wake all clients
+echo [3] Cancel
+echo.
+set /p wolchoice="Your choice: "
+
+if "%wolchoice%"=="1" goto wolsingle
+if "%wolchoice%"=="2" goto wolall
+goto advanced
+
+:wolsingle
+set /p wolclient="Enter client FQDN: "
+echo.
+echo Sending WOL packet to %wolclient%...
+ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "opsi-admin -d method hostControl_start '%wolclient%'"
+if errorlevel 1 (
+    echo [ERROR] WOL failed
+) else (
+    echo [OK] WOL packet sent to %wolclient%
+)
+pause
+goto advanced
+
+:wolall
+echo.
+echo Waking all clients...
+ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "opsi-admin -d method hostControl_start"
+echo [OK] WOL packets sent
 pause
 goto advanced
 
