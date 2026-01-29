@@ -909,10 +909,10 @@ cls
 echo.
 echo === WAKE ON LAN ===
 echo.
-set opsiserver=10.1.0.2
-set opsiuser=root
-set /p opsiserver="OPSI Server [%opsiserver%]: "
-set /p opsiuser="SSH User [%opsiuser%]: "
+set /p opsiserver="OPSI Server (Enter = 10.1.0.2): "
+if "%opsiserver%"=="" set opsiserver=10.1.0.2
+set /p opsiuser="SSH User (Enter = root): "
+if "%opsiuser%"=="" set opsiuser=root
 echo.
 echo Fetching client list...
 ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "opsi-admin -d method host_getIdents"
