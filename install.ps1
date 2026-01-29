@@ -773,7 +773,8 @@ echo [1] Set up SSH key
 echo [2] Show server logs
 echo [3] Check client status
 echo [4] Synchronize depot
-echo [5] Back to main menu
+echo [5] Wake on LAN
+echo [6] Back to main menu
 echo.
 set /p advchoice="Your choice: "
 
@@ -872,6 +873,47 @@ if "%advchoice%"=="4" (
     ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "opsi-package-updater -v update"
     pause
 )
+
+if "%advchoice%"=="5" (
+    echo.
+    echo === WAKE ON LAN ===
+    echo.
+    set /p opsiserver="OPSI Server (Enter = 10.1.0.2): "
+    if "!opsiserver!"=="" set opsiserver=10.1.0.2
+    set /p opsiuser="SSH User (Enter = root): "
+    if "!opsiuser!"=="" set opsiuser=root
+    echo.
+    echo Fetching client list...
+    ssh -o ConnectTimeout=10 !opsiuser!@!opsiserver! "opsi-admin -d method host_getIdents 2>/dev/null | grep -v '^\[' | grep -v '^\]' | tr -d '\",' | tr -d ' '"
+    echo.
+    echo [1] Wake single client
+    echo [2] Wake all clients
+    echo [3] Cancel
+    echo.
+    set /p wolchoice="Your choice: "
+    if "!wolchoice!"=="1" (
+        set /p wolclient="Enter client FQDN: "
+        echo.
+        echo Sending WOL packet to !wolclient!...
+        ssh -o ConnectTimeout=10 !opsiuser!@!opsiserver! "opsi-admin -d method hostControl_start '!wolclient!'"
+        if errorlevel 1 (
+            echo [ERROR] WOL failed
+        ) else (
+            echo [OK] WOL packet sent to !wolclient!
+        )
+    )
+    if "!wolchoice!"=="2" (
+        echo.
+        echo Waking all clients...
+        ssh -o ConnectTimeout=10 !opsiuser!@!opsiserver! "opsi-wakeup-clients 2>/dev/null || opsi-admin -d method hostControl_start"
+        echo [OK] WOL packets sent
+    )
+    echo.
+    pause
+    goto advanced
+)
+
+if "%advchoice%"=="6" goto menu
 
 goto menu
 
