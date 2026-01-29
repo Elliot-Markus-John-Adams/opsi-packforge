@@ -774,7 +774,10 @@ echo [2] Show server logs
 echo [3] Check client status
 echo [4] Synchronize depot
 echo [5] Wake on LAN
-echo [6] Back to main menu
+echo [6] Shutdown clients
+echo [7] Reboot clients
+echo [8] Execute command on client
+echo [9] Back to main menu
 echo.
 set /p advchoice="Your choice: "
 
@@ -875,8 +878,10 @@ if "%advchoice%"=="4" (
 )
 
 if "%advchoice%"=="5" goto wakeonlan
-
-if "%advchoice%"=="6" goto menu
+if "%advchoice%"=="6" goto shutdownclients
+if "%advchoice%"=="7" goto rebootclients
+if "%advchoice%"=="8" goto execcommand
+if "%advchoice%"=="9" goto menu
 
 goto menu
 
@@ -918,13 +923,15 @@ echo Fetching client list...
 ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "opsi-admin -d method host_getIdents"
 echo.
 echo [1] Wake single client
-echo [2] Wake all clients
-echo [3] Cancel
+echo [2] Wake by pattern (e.g. 405-pc-*)
+echo [3] Wake all clients
+echo [4] Cancel
 echo.
 set /p wolchoice="Your choice: "
 
 if "%wolchoice%"=="1" goto wolsingle
-if "%wolchoice%"=="2" goto wolall
+if "%wolchoice%"=="2" goto wolpattern
+if "%wolchoice%"=="3" goto wolall
 goto advanced
 
 :wolsingle
@@ -940,11 +947,160 @@ if errorlevel 1 (
 pause
 goto advanced
 
+:wolpattern
+set /p wolpattern="Enter pattern (e.g. 405-pc or laptop): "
+echo.
+echo Waking clients matching '%wolpattern%'...
+ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "opsi-admin -d method host_getIdents | tr -d '[]\",' | grep -i '%wolpattern%' | while read client; do echo \"Waking $client...\"; opsi-admin -d method hostControl_start \"$client\"; done"
+echo [OK] WOL packets sent to matching clients
+pause
+goto advanced
+
 :wolall
 echo.
 echo Waking all clients...
 ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "opsi-admin -d method hostControl_start"
 echo [OK] WOL packets sent
+pause
+goto advanced
+
+:shutdownclients
+cls
+echo.
+echo === SHUTDOWN CLIENTS ===
+echo.
+set /p opsiserver="OPSI Server (Enter = 10.1.0.2): "
+if "%opsiserver%"=="" set opsiserver=10.1.0.2
+set /p opsiuser="SSH User (Enter = root): "
+if "%opsiuser%"=="" set opsiuser=root
+echo.
+echo Fetching client list...
+ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "opsi-admin -d method host_getIdents"
+echo.
+echo [1] Shutdown single client
+echo [2] Shutdown by pattern (e.g. 405-pc-*)
+echo [3] Shutdown ALL clients (DANGEROUS!)
+echo [4] Cancel
+echo.
+set /p sdchoice="Your choice: "
+
+if "%sdchoice%"=="1" goto sdsingle
+if "%sdchoice%"=="2" goto sdpattern
+if "%sdchoice%"=="3" goto sdall
+goto advanced
+
+:sdsingle
+set /p sdclient="Enter client FQDN: "
+echo.
+echo Shutting down %sdclient%...
+ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "opsi-admin -d method hostControlSafe_shutdown '%sdclient%'"
+echo [OK] Shutdown command sent to %sdclient%
+pause
+goto advanced
+
+:sdpattern
+set /p sdpattern="Enter pattern (e.g. 405-pc or laptop): "
+echo.
+echo Shutting down clients matching '%sdpattern%'...
+ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "opsi-admin -d method host_getIdents | tr -d '[]\",' | grep -i '%sdpattern%' | while read client; do echo \"Shutting down $client...\"; opsi-admin -d method hostControlSafe_shutdown \"$client\"; done"
+echo [OK] Shutdown commands sent to matching clients
+pause
+goto advanced
+
+:sdall
+echo.
+echo WARNING: This will shutdown ALL clients!
+set /p sdconfirm="Type YES to confirm: "
+if not "%sdconfirm%"=="YES" goto advanced
+echo.
+echo Shutting down all clients...
+ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "opsi-admin -d method hostControlSafe_shutdown '*'"
+echo [OK] Shutdown commands sent to all clients
+pause
+goto advanced
+
+:rebootclients
+cls
+echo.
+echo === REBOOT CLIENTS ===
+echo.
+set /p opsiserver="OPSI Server (Enter = 10.1.0.2): "
+if "%opsiserver%"=="" set opsiserver=10.1.0.2
+set /p opsiuser="SSH User (Enter = root): "
+if "%opsiuser%"=="" set opsiuser=root
+echo.
+echo Fetching client list...
+ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "opsi-admin -d method host_getIdents"
+echo.
+echo [1] Reboot single client
+echo [2] Reboot by pattern (e.g. 405-pc-*)
+echo [3] Reboot ALL clients (DANGEROUS!)
+echo [4] Cancel
+echo.
+set /p rbchoice="Your choice: "
+
+if "%rbchoice%"=="1" goto rbsingle
+if "%rbchoice%"=="2" goto rbpattern
+if "%rbchoice%"=="3" goto rball
+goto advanced
+
+:rbsingle
+set /p rbclient="Enter client FQDN: "
+echo.
+echo Rebooting %rbclient%...
+ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "opsi-admin -d method hostControlSafe_reboot '%rbclient%'"
+echo [OK] Reboot command sent to %rbclient%
+pause
+goto advanced
+
+:rbpattern
+set /p rbpattern="Enter pattern (e.g. 405-pc or laptop): "
+echo.
+echo Rebooting clients matching '%rbpattern%'...
+ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "opsi-admin -d method host_getIdents | tr -d '[]\",' | grep -i '%rbpattern%' | while read client; do echo \"Rebooting $client...\"; opsi-admin -d method hostControlSafe_reboot \"$client\"; done"
+echo [OK] Reboot commands sent to matching clients
+pause
+goto advanced
+
+:rball
+echo.
+echo WARNING: This will reboot ALL clients!
+set /p rbconfirm="Type YES to confirm: "
+if not "%rbconfirm%"=="YES" goto advanced
+echo.
+echo Rebooting all clients...
+ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "opsi-admin -d method hostControlSafe_reboot '*'"
+echo [OK] Reboot commands sent to all clients
+pause
+goto advanced
+
+:execcommand
+cls
+echo.
+echo === EXECUTE COMMAND ON CLIENT ===
+echo.
+set /p opsiserver="OPSI Server (Enter = 10.1.0.2): "
+if "%opsiserver%"=="" set opsiserver=10.1.0.2
+set /p opsiuser="SSH User (Enter = root): "
+if "%opsiuser%"=="" set opsiuser=root
+echo.
+echo Fetching client list...
+ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "opsi-admin -d method host_getIdents"
+echo.
+set /p execclient="Enter client FQDN: "
+echo.
+echo Example commands:
+echo   - cmd.exe /c "ipconfig /all"
+echo   - cmd.exe /c "whoami"
+echo   - cmd.exe /c "systeminfo"
+echo   - powershell.exe -Command "Get-Process"
+echo.
+set /p execcmd="Enter command to execute: "
+echo.
+echo Executing on %execclient%...
+ssh -o ConnectTimeout=30 %opsiuser%@%opsiserver% "opsi-admin -d method hostControlSafe_execute '%execcmd%' '%execclient%'"
+echo.
+echo [OK] Command executed
 pause
 goto advanced
 
