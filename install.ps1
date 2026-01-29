@@ -166,8 +166,8 @@ if not "%setupfile%"=="" (
         REM Auto-detect installer type based on extension
         if /i "!setupext!"==".msi" (
             set installertype=msi
-            set silentparam=/qn
-            echo [AUTO] MSI installer detected - Silent: /qn
+            set silentparam=/qn /norestart
+            echo [AUTO] MSI installer detected - msiexec /qn /norestart
         )
         if /i "!setupext!"==".bat" (
             set installertype=batch
@@ -191,17 +191,25 @@ if not "%setupfile%"=="" (
             findstr /i /c:"Inno Setup" "%setupfile%" >nul 2>&1
             if not errorlevel 1 (
                 set installertype=inno
-                set silentparam=/VERYSILENT /NORESTART
-                echo [AUTO] InnoSetup detected - Silent: /VERYSILENT /NORESTART
+                set silentparam=/VERYSILENT /SUPPRESSMSGBOXES /NORESTART
+                echo [AUTO] InnoSetup detected
             ) else (
                 findstr /i /c:"Nullsoft" "%setupfile%" >nul 2>&1
                 if not errorlevel 1 (
                     set installertype=nsis
                     set silentparam=/S
-                    echo [AUTO] NSIS detected - Silent: /S
+                    echo [AUTO] NSIS detected - Note: /S must be uppercase!
                 ) else (
-                    echo [INFO] Standard EXE - Please specify silent parameter manually if needed
-                    set /p silentparam="Silent parameter (Enter for none): "
+                    findstr /i /c:"InstallShield" "%setupfile%" >nul 2>&1
+                    if not errorlevel 1 (
+                        set installertype=installshield
+                        set silentparam=/s /sms
+                        echo [AUTO] InstallShield detected
+                    ) else (
+                        echo [INFO] Unknown EXE type - Please specify silent parameter
+                        echo Common options: /S, /silent, /quiet, /VERYSILENT
+                        set /p silentparam="Silent parameter (Enter for none): "
+                    )
                 )
             )
         )
@@ -214,46 +222,52 @@ if not "%setupfile%"=="" (
     echo You can copy files manually to CLIENT_DATA\files\ later.
     echo.
     echo --- INSTALLER TYPE ---
-    echo [1] MSI installer - Silent: /qn
-    echo [2] EXE InnoSetup - Silent: /VERYSILENT /NORESTART
-    echo [3] EXE NSIS      - Silent: /S
-    echo [4] EXE Other     - Custom silent parameter
-    echo [5] PowerShell script
-    echo [6] Batch file
-    echo [7] Skip for now
+    echo [1] MSI installer        - msiexec /qn /norestart
+    echo [2] EXE InnoSetup        - /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
+    echo [3] EXE NSIS             - /S
+    echo [4] EXE InstallShield    - /s /sms
+    echo [5] EXE Other            - Custom silent parameter
+    echo [6] PowerShell script
+    echo [7] Batch file
+    echo [8] Skip for now
     echo.
-    set /p insttype="Select installer type (1-7): "
+    set /p insttype="Select installer type (1-8): "
     if "!insttype!"=="1" (
         set installertype=msi
-        set silentparam=/qn
-        echo [OK] MSI selected - Silent: /qn
+        set silentparam=/qn /norestart
+        echo [OK] MSI selected - msiexec /i file.msi /qn /norestart
     )
     if "!insttype!"=="2" (
         set installertype=inno
-        set silentparam=/VERYSILENT /NORESTART
-        echo [OK] InnoSetup selected - Silent: /VERYSILENT /NORESTART
+        set silentparam=/VERYSILENT /SUPPRESSMSGBOXES /NORESTART
+        echo [OK] InnoSetup selected
     )
     if "!insttype!"=="3" (
         set installertype=nsis
         set silentparam=/S
-        echo [OK] NSIS selected - Silent: /S
+        echo [OK] NSIS selected - Note: /S must be uppercase!
     )
     if "!insttype!"=="4" (
+        set installertype=installshield
+        set silentparam=/s /sms
+        echo [OK] InstallShield selected
+    )
+    if "!insttype!"=="5" (
         set installertype=exe
         set /p silentparam="Enter silent parameter: "
         echo [OK] Custom EXE - Silent: !silentparam!
     )
-    if "!insttype!"=="5" (
+    if "!insttype!"=="6" (
         set installertype=powershell
         set silentparam=
         echo [OK] PowerShell script selected
     )
-    if "!insttype!"=="6" (
+    if "!insttype!"=="7" (
         set installertype=batch
         set silentparam=
         echo [OK] Batch file selected
     )
-    if "!insttype!"=="7" (
+    if "!insttype!"=="8" (
         echo [OK] Skipped - configure manually later
     )
 )
