@@ -506,7 +506,7 @@ if /i NOT "%readydeploy%"=="Y" (
     echo Then run these commands manually:
     echo ----------------------------------------
     echo scp -r "%pkgdir%" %opsiuser%@%opsiserver%:/var/lib/opsi/workbench/
-    echo ssh %opsiuser%@%opsiserver%
+    echo ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver%
     echo opsi-makepackage %pkgid%_%pkgversion%
     echo opsi-package-manager -i %pkgid%_%pkgversion%.opsi
     echo ----------------------------------------
@@ -531,11 +531,11 @@ echo [OK] Package copied to server
 echo.
 
 echo Step 2/4: Building OPSI package...
-ssh %opsiuser%@%opsiserver% "cd /var/lib/opsi/workbench && rm -f %pkgid%_%pkgversion%-*.opsi 2>/dev/null; opsi-makepackage %pkgid%_%pkgversion%"
+ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "cd /var/lib/opsi/workbench && rm -f %pkgid%_%pkgversion%-*.opsi 2>/dev/null; opsi-makepackage %pkgid%_%pkgversion%"
 echo.
 
 echo Step 3/4: Installing in OPSI...
-ssh %opsiuser%@%opsiserver% "opsi-package-manager -q -i /var/lib/opsi/workbench/%pkgid%_%pkgversion%-1.opsi"
+ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "opsi-package-manager -q -i /var/lib/opsi/workbench/%pkgid%_%pkgversion%-1.opsi"
 if errorlevel 1 (
     echo [WARNING] Installation may have failed
 ) else (
@@ -544,7 +544,7 @@ if errorlevel 1 (
 echo.
 
 echo Step 4/4: Verifying installation...
-ssh %opsiuser%@%opsiserver% "opsi-package-manager -l | grep -i %pkgid%"
+ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "opsi-package-manager -l | grep -i %pkgid%"
 echo.
 
 echo ==================================
@@ -581,13 +581,13 @@ if errorlevel 1 (
 
 echo.
 echo Loading installed packages from server...
-ssh %opsiuser%@%opsiserver% "opsi-package-manager -l | tail -n +4 | awk '{print $1}' | sort"
+ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "opsi-package-manager -l | tail -n +4 | awk '{print $1}' | sort"
 echo.
 set /p pkgupdate="Which package to update? (Enter package ID): "
 
 echo.
 echo Checking if workbench folder exists...
-ssh %opsiuser%@%opsiserver% "if [ -d /var/lib/opsi/workbench/%pkgupdate%_* ]; then echo 'Workbench folder found'; else echo 'No workbench folder - copying from depot...'; cp -r /var/lib/opsi/depot/%pkgupdate% /var/lib/opsi/workbench/%pkgupdate%_update 2>/dev/null || echo '[WARNING] Depot folder not found'; fi"
+ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "if [ -d /var/lib/opsi/workbench/%pkgupdate%_* ]; then echo 'Workbench folder found'; else echo 'No workbench folder - copying from depot...'; cp -r /var/lib/opsi/depot/%pkgupdate% /var/lib/opsi/workbench/%pkgupdate%_update 2>/dev/null || echo '[WARNING] Depot folder not found'; fi"
 
 echo.
 set /p newversion="New version (Enter = keep version): "
@@ -603,7 +603,7 @@ if "%updatetype%"=="1" (
     echo.
     set /p newsetup="Path to new setup file: "
     echo Copying new setup file to server...
-    ssh %opsiuser%@%opsiserver% "find /var/lib/opsi/workbench -maxdepth 2 -name '%pkgupdate%*' -type d | head -1" > %temp%\pkgdir.txt
+    ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "find /var/lib/opsi/workbench -maxdepth 2 -name '%pkgupdate%*' -type d | head -1" > %temp%\pkgdir.txt
     set /p pkgdir=<%temp%\pkgdir.txt
     scp "%newsetup%" %opsiuser%@%opsiserver%:%pkgdir%/CLIENT_DATA/files/
     echo [OK] Setup file updated
@@ -611,10 +611,10 @@ if "%updatetype%"=="1" (
 
 echo.
 echo Searching workbench folder and rebuilding package...
-ssh %opsiuser%@%opsiserver% "pkgdir=$(find /var/lib/opsi/workbench -maxdepth 2 -name '%pkgupdate%*' -type d | head -1); if [ -n \"$pkgdir\" ]; then cd \"$pkgdir\" && cd .. && opsi-makepackage \"$(basename $pkgdir)\"; else echo '[ERROR] No workbench folder found'; fi"
+ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "pkgdir=$(find /var/lib/opsi/workbench -maxdepth 2 -name '%pkgupdate%*' -type d | head -1); if [ -n \"$pkgdir\" ]; then cd \"$pkgdir\" && cd .. && opsi-makepackage \"$(basename $pkgdir)\"; else echo '[ERROR] No workbench folder found'; fi"
 echo.
 echo Installing updated package...
-ssh %opsiuser%@%opsiserver% "latest=$(ls -t /var/lib/opsi/workbench/%pkgupdate%*.opsi 2>/dev/null | head -1); if [ -n \"$latest\" ]; then opsi-package-manager -q -i \"$latest\"; else echo '[ERROR] No package found'; fi"
+ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "latest=$(ls -t /var/lib/opsi/workbench/%pkgupdate%*.opsi 2>/dev/null | head -1); if [ -n \"$latest\" ]; then opsi-package-manager -q -i \"$latest\"; else echo '[ERROR] No package found'; fi"
 
 echo.
 echo [OK] Package updated!
@@ -634,10 +634,10 @@ if "%opsiuser%"=="" set opsiuser=root
 
 echo.
 echo Installed packages:
-ssh %opsiuser%@%opsiserver% "opsi-package-manager -l"
+ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "opsi-package-manager -l"
 echo.
 echo === WORKBENCH PROJECTS (not installed) ===
-ssh %opsiuser%@%opsiserver% "cd /var/lib/opsi/workbench && for dir in */; do pkg=${dir%/}; pkgid=${pkg%%_*}; opsi-package-manager -l | grep -q \"^   $pkgid \" || echo $pkg; done 2>/dev/null"
+ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "cd /var/lib/opsi/workbench && for dir in */; do pkg=${dir%/}; pkgid=${pkg%%_*}; opsi-package-manager -l | grep -q \"^   $pkgid \" || echo $pkg; done 2>/dev/null"
 echo.
 set /p pkgdelete="Package ID or workbench folder to delete: "
 
@@ -664,17 +664,17 @@ echo.
 REM Extract package ID: remove only _VERSION at the end (e.g. _1.0.0)
 REM Extract server-side to handle complex names like opsi-hotfix correctly
 echo Determining package ID...
-for /f "delims=" %%i in ('ssh %opsiuser%@%opsiserver% "echo '%pkgdelete%' | sed 's/_[0-9][0-9.]*[-0-9]*$//' "') do set pkgid=%%i
+for /f "delims=" %%i in ('ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "echo '%pkgdelete%' | sed 's/_[0-9][0-9.]*[-0-9]*$//' "') do set pkgid=%%i
 if "%pkgid%"=="" set pkgid=%pkgdelete%
 echo Package ID: %pkgid%
 
 echo.
 echo Checking if package is installed...
-ssh %opsiuser%@%opsiserver% "opsi-package-manager -l | grep -q \"   %pkgid% \" && echo '[INFO] Package is installed' || echo '[INFO] Only in workbench'"
+ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "opsi-package-manager -l | grep -q \"   %pkgid% \" && echo '[INFO] Package is installed' || echo '[INFO] Only in workbench'"
 
 if "%deleteoption%"=="1" (
     echo Deleting package '%pkgid%' ...
-    ssh %opsiuser%@%opsiserver% "TERM=dumb opsi-package-manager -q -r %pkgid% 2>/dev/null"
+    ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "TERM=dumb opsi-package-manager -q -r %pkgid% 2>/dev/null"
     if errorlevel 1 (
         echo [INFO] Package not installed or error during deletion
     ) else (
@@ -682,7 +682,7 @@ if "%deleteoption%"=="1" (
     )
 ) else if "%deleteoption%"=="2" (
     echo Deleting package '%pkgid%' with --purge ...
-    ssh %opsiuser%@%opsiserver% "TERM=dumb opsi-package-manager -q -r %pkgid% --purge 2>/dev/null"
+    ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "TERM=dumb opsi-package-manager -q -r %pkgid% --purge 2>/dev/null"
     if errorlevel 1 (
         echo [INFO] Package not installed or error during deletion
     ) else (
@@ -707,7 +707,7 @@ if errorlevel 1 (
 echo [INFO] Package still present - AGGRESSIVE DELETE...
 echo.
 
-ssh %opsiuser%@%opsiserver% "echo '=== DELETING EVERYTHING FOR %pkgid% ===' && \
+ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "echo '=== DELETING EVERYTHING FOR %pkgid% ===' && \
 opsi-admin -d method productOnClient_delete '*' '%pkgid%' 2>/dev/null; \
 opsi-admin -d method productPropertyState_delete '*' '%pkgid%' '*' 2>/dev/null; \
 opsi-admin -d method productDependency_delete '%pkgid%' '*' '*' '*' '*' 2>/dev/null; \
@@ -723,7 +723,7 @@ opsiconfd reload 2>/dev/null; \
 echo '=== DONE ==='"
 
 echo Final check...
-ssh %opsiuser%@%opsiserver% "opsi-package-manager -l | grep -q -i '%pkgid%'"
+ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "opsi-package-manager -l | grep -q -i '%pkgid%'"
 if errorlevel 1 (
     echo [OK] Package '%pkgid%' successfully removed!
 ) else (
@@ -756,10 +756,10 @@ if errorlevel 1 (
 
 echo.
 echo ===== INSTALLED PACKAGES =====
-ssh %opsiuser%@%opsiserver% "opsi-package-manager -l"
+ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "opsi-package-manager -l"
 echo.
 echo ===== WORKBENCH PACKAGES =====
-ssh %opsiuser%@%opsiserver% "ls -la /var/lib/opsi/workbench/"
+ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "ls -la /var/lib/opsi/workbench/"
 echo.
 pause
 goto menu
@@ -816,7 +816,7 @@ if "%advchoice%"=="1" (
     echo Step 3/4: Copying public key to server...
     echo [INFO] You will be asked for the password for !opsiuser!@!opsiserver!
     echo.
-    type "%USERPROFILE%\.ssh\id_rsa.pub" | ssh !opsiuser!@!opsiserver! "mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
+    type "%USERPROFILE%\.ssh\id_rsa.pub" | ssh -o ConnectTimeout=10 !opsiuser!@!opsiserver! "mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
     if errorlevel 1 (
         echo [ERROR] Key copy failed
         pause
@@ -848,16 +848,16 @@ if "%advchoice%"=="2" (
     if "%opsiuser%"=="" set opsiuser=root
     echo.
     echo === AVAILABLE LOG FILES ===
-    ssh %opsiuser%@%opsiserver% "ls -la /var/log/opsi/*.log 2>/dev/null | tail -10"
+    ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "ls -la /var/log/opsi/*.log 2>/dev/null | tail -10"
     echo.
     echo === LATEST PACKAGE.LOG ENTRIES ===
-    ssh %opsiuser%@%opsiserver% "if [ -f /var/log/opsi/package.log ]; then tail -20 /var/log/opsi/package.log; else echo 'package.log not found'; fi"
+    ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "if [ -f /var/log/opsi/package.log ]; then tail -20 /var/log/opsi/package.log; else echo 'package.log not found'; fi"
     echo.
     echo === LATEST OPSICONFD.LOG ENTRIES ===
-    ssh %opsiuser%@%opsiserver% "if [ -f /var/log/opsi/opsiconfd.log ]; then tail -20 /var/log/opsi/opsiconfd.log; else echo 'opsiconfd.log not found'; fi"
+    ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "if [ -f /var/log/opsi/opsiconfd.log ]; then tail -20 /var/log/opsi/opsiconfd.log; else echo 'opsiconfd.log not found'; fi"
     echo.
     echo === LATEST CLIENT LOGS ===
-    ssh %opsiuser%@%opsiserver% "ls -lt /var/log/opsi/clientconnect/*.log 2>/dev/null | head -5"
+    ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "ls -lt /var/log/opsi/clientconnect/*.log 2>/dev/null | head -5"
     pause
 )
 
@@ -869,7 +869,7 @@ if "%advchoice%"=="4" (
     set /p opsiuser="SSH User (Enter = root): "
     if "%opsiuser%"=="" set opsiuser=root
     echo Synchronizing depot...
-    ssh %opsiuser%@%opsiserver% "opsi-package-updater -v update"
+    ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "opsi-package-updater -v update"
     pause
 )
 
@@ -888,11 +888,11 @@ echo.
 echo Connecting to %opsiuser%@%opsiserver%...
 echo.
 echo === REGISTERED CLIENTS ===
-ssh %opsiuser%@%opsiserver% opsi-admin -d method host_getIdents
+ssh -o ConnectTimeout=10 -o ServerAliveInterval=5 %opsiuser%@%opsiserver% "opsi-admin -d method host_getIdents 2>/dev/null"
 if errorlevel 1 echo [ERROR] Could not retrieve clients
 echo.
 echo === REACHABLE CLIENTS ===
-ssh %opsiuser%@%opsiserver% "opsi-admin -d method hostControl_reachable | grep true"
+ssh -o ConnectTimeout=10 -o ServerAliveInterval=5 %opsiuser%@%opsiserver% "opsi-admin -d method hostControl_reachable 2>/dev/null | grep true"
 if errorlevel 1 echo [INFO] No reachable clients found
 echo.
 echo Done.
