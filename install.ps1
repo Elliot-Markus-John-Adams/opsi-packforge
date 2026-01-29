@@ -634,9 +634,7 @@ if "%deleteoption%"=="1" (
 
 echo.
 echo Cleaning up workbench and repository...
-ssh %opsiuser%@%opsiserver% "cd /var/lib/opsi/workbench && rm -rf '%pkgid%' '%pkgid%'_* '%pkgid%'.opsi* '%pkgdelete%' '%pkgdelete%'.opsi* 2>/dev/null; echo '[OK] Workbench cleaned'"
-ssh %opsiuser%@%opsiserver% "cd /var/lib/opsi/repository && rm -rf '%pkgid%'* 2>/dev/null; echo '[OK] Repository cleaned'"
-ssh %opsiuser%@%opsiserver% "cd /var/lib/opsi/depot && rm -rf '%pkgid%' 2>/dev/null; echo '[OK] Depot cleaned'"
+ssh %opsiuser%@%opsiserver% "cd /var/lib/opsi/workbench && rm -rf '%pkgid%' '%pkgid%'_* '%pkgid%'.opsi* '%pkgdelete%' '%pkgdelete%'.opsi* 2>/dev/null; echo '[OK] Workbench cleaned'; cd /var/lib/opsi/repository && rm -rf '%pkgid%'* 2>/dev/null; echo '[OK] Repository cleaned'; cd /var/lib/opsi/depot && rm -rf '%pkgid%' 2>/dev/null; echo '[OK] Depot cleaned'"
 
 echo.
 echo Checking if package was removed...
