@@ -212,6 +212,50 @@ if not "%setupfile%"=="" (
 ) else (
     echo [INFO] No setup file specified.
     echo You can copy files manually to CLIENT_DATA\files\ later.
+    echo.
+    echo --- INSTALLER TYPE ---
+    echo [1] MSI installer - Silent: /qn
+    echo [2] EXE InnoSetup - Silent: /VERYSILENT /NORESTART
+    echo [3] EXE NSIS      - Silent: /S
+    echo [4] EXE Other     - Custom silent parameter
+    echo [5] PowerShell script
+    echo [6] Batch file
+    echo [7] Skip for now
+    echo.
+    set /p insttype="Select installer type (1-7): "
+    if "!insttype!"=="1" (
+        set installertype=msi
+        set silentparam=/qn
+        echo [OK] MSI selected - Silent: /qn
+    )
+    if "!insttype!"=="2" (
+        set installertype=inno
+        set silentparam=/VERYSILENT /NORESTART
+        echo [OK] InnoSetup selected - Silent: /VERYSILENT /NORESTART
+    )
+    if "!insttype!"=="3" (
+        set installertype=nsis
+        set silentparam=/S
+        echo [OK] NSIS selected - Silent: /S
+    )
+    if "!insttype!"=="4" (
+        set installertype=exe
+        set /p silentparam="Enter silent parameter: "
+        echo [OK] Custom EXE - Silent: !silentparam!
+    )
+    if "!insttype!"=="5" (
+        set installertype=powershell
+        set silentparam=
+        echo [OK] PowerShell script selected
+    )
+    if "!insttype!"=="6" (
+        set installertype=batch
+        set silentparam=
+        echo [OK] Batch file selected
+    )
+    if "!insttype!"=="7" (
+        echo [OK] Skipped - configure manually later
+    )
 )
 
 REM Create control file with extended metadata
