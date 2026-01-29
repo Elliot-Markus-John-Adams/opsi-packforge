@@ -1,83 +1,83 @@
-# OPSI PackForge - Einfacher Installer
-# Prueft ob bereits installiert und startet direkt
+# OPSI PackForge - Simple Installer
+# Checks if already installed and starts directly
 
 $installPath = "$env:LOCALAPPDATA\OPSI-PackForge"
 $appPath = "$installPath\app\opsi_packforge.bat"
 
-# Pruefen ob bereits installiert - aber trotzdem aktualisieren
+# Check if already installed - but still update
 if (Test-Path $appPath) {
     Write-Host ""
-    Write-Host "OPSI PackForge ist bereits installiert!" -ForegroundColor Green
-    Write-Host "Aktualisiere auf neueste Version..." -ForegroundColor Yellow
+    Write-Host "OPSI PackForge is already installed!" -ForegroundColor Green
+    Write-Host "Updating to latest version..." -ForegroundColor Yellow
     Write-Host ""
-    # Fahre mit Installation fort um die Datei zu aktualisieren
+    # Continue with installation to update the file
 }
 
 Clear-Host
 Write-Host ""
 Write-Host "====================================" -ForegroundColor Cyan
-Write-Host "  OPSI PackForge - Simple Installer" -ForegroundColor Cyan  
+Write-Host "  OPSI PackForge - Simple Installer" -ForegroundColor Cyan
 Write-Host "====================================" -ForegroundColor Cyan
 Write-Host ""
 
-Write-Host "[1] Installation starten" -ForegroundColor Yellow
-Write-Host "[2] Beenden" -ForegroundColor Yellow
+Write-Host "[1] Start installation" -ForegroundColor Yellow
+Write-Host "[2] Exit" -ForegroundColor Yellow
 Write-Host ""
 
-$choice = Read-Host "Bitte waehlen Sie eine Option (1-2)"
+$choice = Read-Host "Please select an option (1-2)"
 
 switch ($choice) {
     "1" {
         Write-Host ""
-        Write-Host "Installation wird gestartet..." -ForegroundColor Green
+        Write-Host "Starting installation..." -ForegroundColor Green
         Write-Host ""
-        
-        # Schritt 1
-        Write-Host "Schritt 1: Erstelle Verzeichnis..." -ForegroundColor Yellow
+
+        # Step 1
+        Write-Host "Step 1: Creating directory..." -ForegroundColor Yellow
         New-Item -ItemType Directory -Path $installPath -Force | Out-Null
-        Write-Host "OK - Verzeichnis erstellt: $installPath" -ForegroundColor Green
+        Write-Host "OK - Directory created: $installPath" -ForegroundColor Green
         Write-Host ""
-        
-        # Schritt 2 - Python nur wenn noetig
+
+        # Step 2 - Python only if needed
         if (-not (Test-Path "$installPath\python\python.exe")) {
-            Write-Host "Schritt 2: Lade Python herunter..." -ForegroundColor Yellow
-            Write-Host "Dies kann einige Minuten dauern..." -ForegroundColor Gray
-            
+            Write-Host "Step 2: Downloading Python..." -ForegroundColor Yellow
+            Write-Host "This may take a few minutes..." -ForegroundColor Gray
+
             try {
                 $pythonUrl = "https://www.python.org/ftp/python/3.11.9/python-3.11.9-embed-amd64.zip"
                 $pythonZip = "$env:TEMP\python.zip"
-                
-                # Proxy-Support
+
+                # Proxy support
                 [System.Net.WebRequest]::DefaultWebProxy.Credentials = [System.Net.CredentialCache]::DefaultCredentials
                 $client = New-Object System.Net.WebClient
                 $client.Proxy.Credentials = [System.Net.CredentialCache]::DefaultNetworkCredentials
                 $client.DownloadFile($pythonUrl, $pythonZip)
-                
-                Write-Host "OK - Python heruntergeladen" -ForegroundColor Green
+
+                Write-Host "OK - Python downloaded" -ForegroundColor Green
                 Write-Host ""
-                
-                # Schritt 3
-                Write-Host "Schritt 3: Entpacke Python..." -ForegroundColor Yellow
+
+                # Step 3
+                Write-Host "Step 3: Extracting Python..." -ForegroundColor Yellow
                 Expand-Archive -Path $pythonZip -DestinationPath "$installPath\python" -Force
                 Remove-Item $pythonZip
-            
-                Write-Host "OK - Python installiert" -ForegroundColor Green
+
+                Write-Host "OK - Python installed" -ForegroundColor Green
                 Write-Host ""
             } catch {
-                Write-Host "FEHLER: $_" -ForegroundColor Red
+                Write-Host "ERROR: $_" -ForegroundColor Red
                 exit 1
             }
         } else {
-            Write-Host "Schritt 2-3: Python bereits vorhanden - ueberspringe Download" -ForegroundColor Green
+            Write-Host "Step 2-3: Python already present - skipping download" -ForegroundColor Green
             Write-Host ""
         }
-        
-        # Schritt 4
-        Write-Host "Schritt 4: Erstelle OPSI PackForge..." -ForegroundColor Yellow
+
+        # Step 4
+        Write-Host "Step 4: Creating OPSI PackForge..." -ForegroundColor Yellow
         $appPath = "$installPath\app"
         New-Item -ItemType Directory -Path $appPath -Force | Out-Null
-        
-        # Erstelle das Haupt-Script
+
+        # Create the main script
         $batchScript = @'
 @echo off
 setlocal enabledelayedexpansion
@@ -96,15 +96,15 @@ echo                                                            ^|___/
 echo.
 echo                                        [ v2.0 ]
 echo.
-echo [1] Neues Paket erstellen
-echo [2] Paket aktualisieren
-echo [3] Paket loeschen
-echo [4] Server-Pakete anzeigen
-echo [5] Erweiterte Optionen
-echo [6] Hilfe
-echo [7] Beenden
+echo [1] Create new package
+echo [2] Update package
+echo [3] Delete package
+echo [4] Show server packages
+echo [5] Advanced options
+echo [6] Help
+echo [7] Exit
 echo.
-set /p choice="Ihre Wahl: "
+set /p choice="Your choice: "
 
 if "%choice%"=="1" goto create
 if "%choice%"=="2" goto update
@@ -118,47 +118,47 @@ goto menu
 :create
 cls
 echo.
-echo === NEUES OPSI-PAKET ERSTELLEN ===
+echo === CREATE NEW OPSI PACKAGE ===
 echo.
-echo --- GRUNDLEGENDE INFORMATIONEN ---
-set /p pkgid="Paket-ID (z.B. firefox): "
-set /p pkgname="Paket-Name: "
-set /p pkgversion="Version (z.B. 1.0.0): "
+echo --- BASIC INFORMATION ---
+set /p pkgid="Package ID (e.g. firefox): "
+set /p pkgname="Package name: "
+set /p pkgversion="Version (e.g. 1.0.0): "
 if "%pkgversion%"=="" set pkgversion=1.0.0
 
 echo.
-echo --- ERWEITERTE METADATEN ---
-set /p pkgdesc="Beschreibung: "
+echo --- EXTENDED METADATA ---
+set /p pkgdesc="Description: "
 if "%pkgdesc%"=="" set pkgdesc=%pkgname% Installation
-set /p pkgadvice="Hinweise (optional): "
-set /p pkgdepends="Abhaengigkeiten (kommagetrennt, optional): "
-set /p pkgpriority="Prioritaet (0-100, Enter=0): "
+set /p pkgadvice="Notes (optional): "
+set /p pkgdepends="Dependencies (comma-separated, optional): "
+set /p pkgpriority="Priority (0-100, Enter=0): "
 if "%pkgpriority%"=="" set pkgpriority=0
-set /p pkgclasses="Produkt-Klassen (kommagetrennt, optional): "
+set /p pkgclasses="Product classes (comma-separated, optional): "
 
 echo.
-echo --- SETUP-KONFIGURATION ---
-set /p setupfile="Setup-Datei (Pfad oder Enter fuer spaeter): "
+echo --- SETUP CONFIGURATION ---
+set /p setupfile="Setup file (path or Enter for later): "
 
-set /p output="Ausgabe-Ordner (Enter fuer Desktop): "
+set /p output="Output folder (Enter for Desktop): "
 if "%output%"=="" set output=%USERPROFILE%\Desktop
 
 set pkgdir=%output%\%pkgid%_%pkgversion%
 
 echo.
-echo Erstelle Paket-Struktur...
+echo Creating package structure...
 mkdir "%pkgdir%\OPSI" 2>nul
 mkdir "%pkgdir%\CLIENT_DATA" 2>nul
 mkdir "%pkgdir%\CLIENT_DATA\files" 2>nul
 
-REM Setup-Datei kopieren und Typ auto-erkennen
+REM Copy setup file and auto-detect type
 set setupfilename=
 set silentparam=
 set installertype=exe
 
 if not "%setupfile%"=="" (
     if exist "%setupfile%" (
-        echo Kopiere Setup-Datei...
+        echo Copying setup file...
         copy "%setupfile%" "%pkgdir%\CLIENT_DATA\files\" >nul
         for %%F in ("%setupfile%") do (
             set setupfilename=%%~nxF
@@ -168,54 +168,54 @@ if not "%setupfile%"=="" (
         if /i "!setupext!"==".msi" (
             set installertype=msi
             set silentparam=/qn
-            echo [AUTO] MSI Installer erkannt - Silent: /qn
+            echo [AUTO] MSI installer detected - Silent: /qn
         )
         if /i "!setupext!"==".bat" (
             set installertype=batch
             set silentparam=
-            echo [AUTO] Batch-Datei erkannt - Kein Silent-Parameter
+            echo [AUTO] Batch file detected - No silent parameter
         )
         if /i "!setupext!"==".cmd" (
             set installertype=batch
             set silentparam=
-            echo [AUTO] CMD-Datei erkannt - Kein Silent-Parameter
+            echo [AUTO] CMD file detected - No silent parameter
         )
         if /i "!setupext!"==".ps1" (
             set installertype=powershell
             set silentparam=-ExecutionPolicy Bypass -File
-            echo [AUTO] PowerShell-Script erkannt
+            echo [AUTO] PowerShell script detected
         )
         if /i "!setupext!"==".exe" (
             set installertype=exe
-            echo [AUTO] EXE-Installer erkannt
-            echo Pruefe Installer-Typ...
+            echo [AUTO] EXE installer detected
+            echo Checking installer type...
             findstr /i /c:"Inno Setup" "%setupfile%" >nul 2>&1
             if not errorlevel 1 (
                 set installertype=inno
                 set silentparam=/VERYSILENT /NORESTART
-                echo [AUTO] InnoSetup erkannt - Silent: /VERYSILENT /NORESTART
+                echo [AUTO] InnoSetup detected - Silent: /VERYSILENT /NORESTART
             ) else (
                 findstr /i /c:"Nullsoft" "%setupfile%" >nul 2>&1
                 if not errorlevel 1 (
                     set installertype=nsis
                     set silentparam=/S
-                    echo [AUTO] NSIS erkannt - Silent: /S
+                    echo [AUTO] NSIS detected - Silent: /S
                 ) else (
-                    echo [INFO] Standard EXE - Bitte Silent-Parameter manuell angeben falls noetig
-                    set /p silentparam="Silent-Parameter (Enter fuer keinen): "
+                    echo [INFO] Standard EXE - Please specify silent parameter manually if needed
+                    set /p silentparam="Silent parameter (Enter for none): "
                 )
             )
         )
     ) else (
-        echo WARNUNG: Setup-Datei nicht gefunden!
-        echo Sie koennen die Datei spaeter manuell in CLIENT_DATA\files\ kopieren.
+        echo WARNING: Setup file not found!
+        echo You can copy the file manually to CLIENT_DATA\files\ later.
     )
 ) else (
-    echo [INFO] Keine Setup-Datei angegeben.
-    echo Sie koennen Dateien spaeter manuell in CLIENT_DATA\files\ kopieren.
+    echo [INFO] No setup file specified.
+    echo You can copy files manually to CLIENT_DATA\files\ later.
 )
 
-REM Control-Datei mit erweiterten Metadaten erstellen
+REM Create control file with extended metadata
 echo [Package] > "%pkgdir%\OPSI\control"
 echo version: 1 >> "%pkgdir%\OPSI\control"
 echo depends: %pkgdepends% >> "%pkgdir%\OPSI\control"
@@ -237,7 +237,7 @@ echo updateScript: >> "%pkgdir%\OPSI\control"
 echo alwaysScript: >> "%pkgdir%\OPSI\control"
 echo onceScript: >> "%pkgdir%\OPSI\control"
 
-REM Setup-Script erstellen basierend auf erkanntem Typ
+REM Create setup script based on detected type
 echo ; Setup script for %pkgname% > "%pkgdir%\CLIENT_DATA\setup.opsiscript"
 echo ; Generated by OPSI PackForge v2.0 >> "%pkgdir%\CLIENT_DATA\setup.opsiscript"
 echo ; Installer type: !installertype! >> "%pkgdir%\CLIENT_DATA\setup.opsiscript"
@@ -252,8 +252,8 @@ echo. >> "%pkgdir%\CLIENT_DATA\setup.opsiscript"
 echo Set $ProductId$ = "%pkgid%" >> "%pkgdir%\CLIENT_DATA\setup.opsiscript"
 
 if "!setupfilename!"=="" (
-    echo ; TODO: Setzen Sie hier Ihren Setup-Dateinamen ein >> "%pkgdir%\CLIENT_DATA\setup.opsiscript"
-    echo Set $SetupFile$ = "%%ScriptPath%%\files\IHRE_DATEI_HIER" >> "%pkgdir%\CLIENT_DATA\setup.opsiscript"
+    echo ; TODO: Set your setup filename here >> "%pkgdir%\CLIENT_DATA\setup.opsiscript"
+    echo Set $SetupFile$ = "%%ScriptPath%%\files\YOUR_FILE_HERE" >> "%pkgdir%\CLIENT_DATA\setup.opsiscript"
 ) else (
     echo Set $SetupFile$ = "%%ScriptPath%%\files\!setupfilename!" >> "%pkgdir%\CLIENT_DATA\setup.opsiscript"
 )
@@ -264,7 +264,7 @@ echo. >> "%pkgdir%\CLIENT_DATA\setup.opsiscript"
 echo comment "Start setup program" >> "%pkgdir%\CLIENT_DATA\setup.opsiscript"
 echo ChangeDirectory "%%ScriptPath%%\files" >> "%pkgdir%\CLIENT_DATA\setup.opsiscript"
 
-REM Unterschiedliche Winbatch-Aufrufe je nach Installer-Typ
+REM Different Winbatch calls depending on installer type
 if "!installertype!"=="msi" (
     echo Winbatch_install_msi >> "%pkgdir%\CLIENT_DATA\setup.opsiscript"
     echo Sub_check_exitcode >> "%pkgdir%\CLIENT_DATA\setup.opsiscript"
@@ -299,62 +299,62 @@ echo     logError "Setup failed with exit code: " + $ExitCode$ >> "%pkgdir%\CLIE
 echo     isFatalError >> "%pkgdir%\CLIENT_DATA\setup.opsiscript"
 echo endif >> "%pkgdir%\CLIENT_DATA\setup.opsiscript"
 
-REM Uninstall-Script erstellen
+REM Create uninstall script
 echo ; Uninstall script for %pkgname% > "%pkgdir%\CLIENT_DATA\uninstall.opsiscript"
 echo [Actions] >> "%pkgdir%\CLIENT_DATA\uninstall.opsiscript"
 echo Message "Uninstalling %pkgname%" >> "%pkgdir%\CLIENT_DATA\uninstall.opsiscript"
 
 echo.
 echo ===================================
-echo PAKET ERFOLGREICH ERSTELLT!
+echo PACKAGE CREATED SUCCESSFULLY!
 echo ===================================
 echo.
-echo Paket-Verzeichnis:
+echo Package directory:
 echo %pkgdir%
 echo.
-echo Oeffne Explorer...
+echo Opening Explorer...
 start explorer "%pkgdir%"
 echo.
-echo --- OPSI-SERVER VERBINDUNG ---
+echo --- OPSI SERVER CONNECTION ---
 echo.
-set /p connect="Moechten Sie sich mit dem OPSI-Server verbinden? (J/N): "
-if /i NOT "%connect%"=="J" goto skip_ssh
+set /p connect="Would you like to connect to the OPSI server? (Y/N): "
+if /i NOT "%connect%"=="Y" goto skip_ssh
 
 echo.
-echo Geben Sie die Verbindungsdaten ein:
+echo Enter the connection details:
 echo ------------------------------------
-set /p opsiserver="OPSI-Server (Enter = 10.1.0.2): "
+set /p opsiserver="OPSI Server (Enter = 10.1.0.2): "
 if "%opsiserver%"=="" set opsiserver=10.1.0.2
-set /p opsiuser="SSH-Benutzer (Enter = root): "
+set /p opsiuser="SSH User (Enter = root): "
 if "%opsiuser%"=="" set opsiuser=root
 
 echo.
-echo Teste Server-Verbindung...
+echo Testing server connection...
 ping -n 1 %opsiserver% >nul 2>&1
 if errorlevel 1 (
-    echo [FEHLER] Server nicht erreichbar!
+    echo [ERROR] Server not reachable!
     goto skip_ssh
 )
 
-echo [OK] Server erreichbar
+echo [OK] Server reachable
 echo.
 echo ----------------------------------------
-echo Paket-Verzeichnis: %pkgdir%
-echo Ziel-Server: %opsiserver%
+echo Package directory: %pkgdir%
+echo Target server: %opsiserver%
 echo ----------------------------------------
 echo.
-set /p readydeploy="Haben Sie alle Setup-Dateien in CLIENT_DATA kopiert? (J/N): "
+set /p readydeploy="Have you copied all setup files to CLIENT_DATA? (Y/N): "
 
 REM Auto-detect setup file from files folder if not already set
-if /i "%readydeploy%"=="J" (
+if /i "%readydeploy%"=="Y" (
     if "!setupfilename!"=="" (
         echo.
-        echo [AUTO] Scanne CLIENT_DATA\files nach Setup-Datei...
+        echo [AUTO] Scanning CLIENT_DATA\files for setup file...
         for %%F in ("%pkgdir%\CLIENT_DATA\files\*.bat" "%pkgdir%\CLIENT_DATA\files\*.cmd" "%pkgdir%\CLIENT_DATA\files\*.exe" "%pkgdir%\CLIENT_DATA\files\*.msi" "%pkgdir%\CLIENT_DATA\files\*.ps1") do (
             if "!setupfilename!"=="" (
                 set setupfilename=%%~nxF
                 set setupext=%%~xF
-                echo [AUTO] Gefunden: !setupfilename!
+                echo [AUTO] Found: !setupfilename!
             )
         )
         if not "!setupfilename!"=="" (
@@ -362,28 +362,28 @@ if /i "%readydeploy%"=="J" (
             if /i "!setupext!"==".msi" (
                 set installertype=msi
                 set silentparam=/qn
-                echo [AUTO] MSI Installer - Silent: /qn
+                echo [AUTO] MSI installer - Silent: /qn
             )
             if /i "!setupext!"==".bat" (
                 set installertype=batch
                 set silentparam=
-                echo [AUTO] Batch-Datei erkannt
+                echo [AUTO] Batch file detected
             )
             if /i "!setupext!"==".cmd" (
                 set installertype=batch
                 set silentparam=
-                echo [AUTO] CMD-Datei erkannt
+                echo [AUTO] CMD file detected
             )
             if /i "!setupext!"==".ps1" (
                 set installertype=powershell
-                echo [AUTO] PowerShell-Script erkannt
+                echo [AUTO] PowerShell script detected
             )
             if /i "!setupext!"==".exe" (
                 set installertype=exe
-                echo [AUTO] EXE-Installer erkannt
+                echo [AUTO] EXE installer detected
             )
             echo.
-            echo [AUTO] Regeneriere setup.opsiscript mit !setupfilename!...
+            echo [AUTO] Regenerating setup.opsiscript with !setupfilename!...
             echo ; Setup script for %pkgname% > "%pkgdir%\CLIENT_DATA\setup.opsiscript"
             echo ; Generated by OPSI PackForge v2.0 >> "%pkgdir%\CLIENT_DATA\setup.opsiscript"
             echo ; Installer type: !installertype! >> "%pkgdir%\CLIENT_DATA\setup.opsiscript"
@@ -434,19 +434,19 @@ if /i "%readydeploy%"=="J" (
             echo     logError "Setup failed with exit code: " + $ExitCode$ >> "%pkgdir%\CLIENT_DATA\setup.opsiscript"
             echo     isFatalError >> "%pkgdir%\CLIENT_DATA\setup.opsiscript"
             echo endif >> "%pkgdir%\CLIENT_DATA\setup.opsiscript"
-            echo [OK] setup.opsiscript aktualisiert
+            echo [OK] setup.opsiscript updated
         ) else (
-            echo [WARNUNG] Keine Setup-Datei in CLIENT_DATA\files gefunden!
+            echo [WARNING] No setup file found in CLIENT_DATA\files!
         )
     )
 )
 
-if /i NOT "%readydeploy%"=="J" (
+if /i NOT "%readydeploy%"=="Y" (
     echo.
-    echo Bitte kopieren Sie erst alle benoetigten Dateien nach:
+    echo Please copy all required files to:
     echo %pkgdir%\CLIENT_DATA\
     echo.
-    echo Dann fuehren Sie diese Befehle manuell aus:
+    echo Then run these commands manually:
     echo ----------------------------------------
     echo scp -r "%pkgdir%" %opsiuser%@%opsiserver%:/var/lib/opsi/workbench/
     echo ssh %opsiuser%@%opsiserver%
@@ -457,45 +457,45 @@ if /i NOT "%readydeploy%"=="J" (
 )
 
 echo.
-echo [AUTOMATISCHES DEPLOYMENT STARTET]
+echo [AUTOMATIC DEPLOYMENT STARTING]
 echo ==================================
 echo.
 
-echo Schritt 1/4: Kopiere Paket auf OPSI-Server...
+echo Step 1/4: Copying package to OPSI server...
 echo.
 scp -r "%pkgdir%" %opsiuser%@%opsiserver%:/var/lib/opsi/workbench/
 if errorlevel 1 (
-    echo [FEHLER] Transfer fehlgeschlagen
-    echo Moeglicherweise fehlt SSH/SCP. Installation mit:
+    echo [ERROR] Transfer failed
+    echo SSH/SCP might be missing. Install with:
     echo   winget install OpenSSH.Client
     goto skip_ssh
 )
-echo [OK] Paket auf Server kopiert
+echo [OK] Package copied to server
 echo.
 
-echo Schritt 2/4: Baue OPSI-Paket...
+echo Step 2/4: Building OPSI package...
 ssh %opsiuser%@%opsiserver% "cd /var/lib/opsi/workbench && rm -f %pkgid%_%pkgversion%-*.opsi 2>/dev/null; opsi-makepackage %pkgid%_%pkgversion%"
 echo.
 
-echo Schritt 3/4: Installiere in OPSI...
+echo Step 3/4: Installing in OPSI...
 ssh %opsiuser%@%opsiserver% "opsi-package-manager -q -i /var/lib/opsi/workbench/%pkgid%_%pkgversion%-1.opsi"
 if errorlevel 1 (
-    echo [WARNUNG] Installation moeglicherweise fehlgeschlagen
+    echo [WARNING] Installation may have failed
 ) else (
-    echo [OK] Paket installiert
+    echo [OK] Package installed
 )
 echo.
 
-echo Schritt 4/4: Pruefe Installation...
+echo Step 4/4: Verifying installation...
 ssh %opsiuser%@%opsiserver% "opsi-package-manager -l | grep -i %pkgid%"
 echo.
 
 echo ==================================
-echo DEPLOYMENT ABGESCHLOSSEN!
+echo DEPLOYMENT COMPLETE!
 echo ==================================
 echo.
-echo Das Paket ist jetzt im OPSI-Configed verfuegbar.
-echo Sie koennen es den Clients zuweisen.
+echo The package is now available in OPSI Configed.
+echo You can assign it to clients.
 
 :skip_ssh
 
@@ -506,153 +506,153 @@ goto menu
 :update
 cls
 echo.
-echo === PAKET AKTUALISIEREN ===
+echo === UPDATE PACKAGE ===
 echo.
-set /p opsiserver="OPSI-Server (Enter = 10.1.0.2): "
+set /p opsiserver="OPSI Server (Enter = 10.1.0.2): "
 if "%opsiserver%"=="" set opsiserver=10.1.0.2
-set /p opsiuser="SSH-Benutzer (Enter = root): "
+set /p opsiuser="SSH User (Enter = root): "
 if "%opsiuser%"=="" set opsiuser=root
 
 echo.
-echo Teste Server-Verbindung...
+echo Testing server connection...
 ping -n 1 %opsiserver% >nul 2>&1
 if errorlevel 1 (
-    echo [FEHLER] Server nicht erreichbar!
+    echo [ERROR] Server not reachable!
     pause
     goto menu
 )
 
 echo.
-echo Lade installierte Pakete vom Server...
+echo Loading installed packages from server...
 ssh %opsiuser%@%opsiserver% "opsi-package-manager -l | tail -n +4 | awk '{print $1}' | sort"
 echo.
-set /p pkgupdate="Welches Paket aktualisieren? (Paket-ID eingeben): "
+set /p pkgupdate="Which package to update? (Enter package ID): "
 
 echo.
-echo Pruefe ob Workbench-Ordner existiert...
-ssh %opsiuser%@%opsiserver% "if [ -d /var/lib/opsi/workbench/%pkgupdate%_* ]; then echo 'Workbench-Ordner gefunden'; else echo 'Kein Workbench-Ordner - kopiere vom Depot...'; cp -r /var/lib/opsi/depot/%pkgupdate% /var/lib/opsi/workbench/%pkgupdate%_update 2>/dev/null || echo '[WARNUNG] Depot-Ordner nicht gefunden'; fi"
+echo Checking if workbench folder exists...
+ssh %opsiuser%@%opsiserver% "if [ -d /var/lib/opsi/workbench/%pkgupdate%_* ]; then echo 'Workbench folder found'; else echo 'No workbench folder - copying from depot...'; cp -r /var/lib/opsi/depot/%pkgupdate% /var/lib/opsi/workbench/%pkgupdate%_update 2>/dev/null || echo '[WARNING] Depot folder not found'; fi"
 
 echo.
-set /p newversion="Neue Version (Enter = Version beibehalten): "
+set /p newversion="New version (Enter = keep version): "
 
 echo.
-echo [1] Setup-Dateien ersetzen
-echo [2] Control-Datei bearbeiten
-echo [3] Scripts aktualisieren
-echo [4] Alles aktualisieren
-set /p updatetype="Was soll aktualisiert werden? (1-4): "
+echo [1] Replace setup files
+echo [2] Edit control file
+echo [3] Update scripts
+echo [4] Update everything
+set /p updatetype="What should be updated? (1-4): "
 
 if "%updatetype%"=="1" (
     echo.
-    set /p newsetup="Pfad zur neuen Setup-Datei: "
-    echo Kopiere neue Setup-Datei auf Server...
+    set /p newsetup="Path to new setup file: "
+    echo Copying new setup file to server...
     ssh %opsiuser%@%opsiserver% "find /var/lib/opsi/workbench -maxdepth 2 -name '%pkgupdate%*' -type d | head -1" > %temp%\pkgdir.txt
     set /p pkgdir=<%temp%\pkgdir.txt
     scp "%newsetup%" %opsiuser%@%opsiserver%:%pkgdir%/CLIENT_DATA/files/
-    echo [OK] Setup-Datei aktualisiert
+    echo [OK] Setup file updated
 )
 
 echo.
-echo Suche Workbench-Ordner und baue Paket neu...
-ssh %opsiuser%@%opsiserver% "pkgdir=$(find /var/lib/opsi/workbench -maxdepth 2 -name '%pkgupdate%*' -type d | head -1); if [ -n \"$pkgdir\" ]; then cd \"$pkgdir\" && cd .. && opsi-makepackage \"$(basename $pkgdir)\"; else echo '[FEHLER] Kein Workbench-Ordner gefunden'; fi"
+echo Searching workbench folder and rebuilding package...
+ssh %opsiuser%@%opsiserver% "pkgdir=$(find /var/lib/opsi/workbench -maxdepth 2 -name '%pkgupdate%*' -type d | head -1); if [ -n \"$pkgdir\" ]; then cd \"$pkgdir\" && cd .. && opsi-makepackage \"$(basename $pkgdir)\"; else echo '[ERROR] No workbench folder found'; fi"
 echo.
-echo Installiere aktualisiertes Paket...
-ssh %opsiuser%@%opsiserver% "latest=$(ls -t /var/lib/opsi/workbench/%pkgupdate%*.opsi 2>/dev/null | head -1); if [ -n \"$latest\" ]; then opsi-package-manager -q -i \"$latest\"; else echo '[FEHLER] Kein Paket gefunden'; fi"
+echo Installing updated package...
+ssh %opsiuser%@%opsiserver% "latest=$(ls -t /var/lib/opsi/workbench/%pkgupdate%*.opsi 2>/dev/null | head -1); if [ -n \"$latest\" ]; then opsi-package-manager -q -i \"$latest\"; else echo '[ERROR] No package found'; fi"
 
 echo.
-echo [OK] Paket aktualisiert!
+echo [OK] Package updated!
 pause
 goto menu
 
 :delete
 cls
 echo.
-echo === PAKET LOESCHEN ===
+echo === DELETE PACKAGE ===
 echo.
 
-set /p opsiserver="OPSI-Server (Enter = 10.1.0.2): "
+set /p opsiserver="OPSI Server (Enter = 10.1.0.2): "
 if "%opsiserver%"=="" set opsiserver=10.1.0.2
-set /p opsiuser="SSH-Benutzer (Enter = root): "
+set /p opsiuser="SSH User (Enter = root): "
 if "%opsiuser%"=="" set opsiuser=root
 
 echo.
-echo Installierte Pakete:
+echo Installed packages:
 ssh %opsiuser%@%opsiserver% "opsi-package-manager -l"
 echo.
-echo === WORKBENCH PROJEKTE (nicht installiert) ===
+echo === WORKBENCH PROJECTS (not installed) ===
 ssh %opsiuser%@%opsiserver% "cd /var/lib/opsi/workbench && for dir in */; do pkg=${dir%/}; pkgid=${pkg%%_*}; opsi-package-manager -l | grep -q \"^   $pkgid \" || echo $pkg; done 2>/dev/null"
 echo.
-set /p pkgdelete="Paket-ID oder Workbench-Ordner zum Loeschen: "
+set /p pkgdelete="Package ID or workbench folder to delete: "
 
 echo.
-echo WARNUNG: Paket '%pkgdelete%' wird komplett entfernt!
+echo WARNING: Package '%pkgdelete%' will be completely removed!
 echo.
-echo Loeschoptionen:
-echo [1] Normal loeschen (empfohlen)
-echo [2] Mit --purge (entfernt auch alle Client-Zuordnungen)
-echo [3] Abbrechen
+echo Delete options:
+echo [1] Normal delete (recommended)
+echo [2] With --purge (also removes all client assignments)
+echo [3] Cancel
 echo.
-set /p deleteoption="Ihre Wahl (1-3): "
+set /p deleteoption="Your choice (1-3): "
 
 if "%deleteoption%"=="3" (
-    echo Abbruch.
+    echo Cancelled.
     pause
     goto menu
 )
 
 echo.
-echo === LOESCHVORGANG STARTET ===
+echo === DELETE PROCESS STARTING ===
 echo.
 
-REM Extrahiere Paket-ID: entferne nur _VERSION am Ende (z.B. _1.0.0)
-REM Server-seitig extrahieren um komplexe Namen wie opsi-hotfix korrekt zu behandeln
-echo Ermittle Paket-ID...
+REM Extract package ID: remove only _VERSION at the end (e.g. _1.0.0)
+REM Extract server-side to handle complex names like opsi-hotfix correctly
+echo Determining package ID...
 for /f "delims=" %%i in ('ssh %opsiuser%@%opsiserver% "echo '%pkgdelete%' | sed 's/_[0-9][0-9.]*[-0-9]*$//' "') do set pkgid=%%i
 if "%pkgid%"=="" set pkgid=%pkgdelete%
-echo Paket-ID: %pkgid%
+echo Package ID: %pkgid%
 
 echo.
-echo Pruefe ob Paket installiert ist...
-ssh %opsiuser%@%opsiserver% "opsi-package-manager -l | grep -q \"   %pkgid% \" && echo '[INFO] Paket ist installiert' || echo '[INFO] Nur in Workbench vorhanden'"
+echo Checking if package is installed...
+ssh %opsiuser%@%opsiserver% "opsi-package-manager -l | grep -q \"   %pkgid% \" && echo '[INFO] Package is installed' || echo '[INFO] Only in workbench'"
 
 if "%deleteoption%"=="1" (
-    echo Loesche Paket '%pkgid%' ...
+    echo Deleting package '%pkgid%' ...
     ssh %opsiuser%@%opsiserver% "TERM=dumb opsi-package-manager -q -r %pkgid% 2>/dev/null"
     if errorlevel 1 (
-        echo [INFO] Paket nicht installiert oder Fehler beim Loeschen
+        echo [INFO] Package not installed or error during deletion
     ) else (
-        echo [OK] Paket aus OPSI entfernt
+        echo [OK] Package removed from OPSI
     )
 ) else if "%deleteoption%"=="2" (
-    echo Loesche Paket '%pkgid%' mit --purge ...
+    echo Deleting package '%pkgid%' with --purge ...
     ssh %opsiuser%@%opsiserver% "TERM=dumb opsi-package-manager -q -r %pkgid% --purge 2>/dev/null"
     if errorlevel 1 (
-        echo [INFO] Paket nicht installiert oder Fehler beim Loeschen
+        echo [INFO] Package not installed or error during deletion
     ) else (
-        echo [OK] Paket aus OPSI entfernt (inkl. Client-Zuordnungen)
+        echo [OK] Package removed from OPSI (including client assignments)
     )
 )
 
 echo.
-echo Raeume Workbench und Repository auf...
-ssh %opsiuser%@%opsiserver% "cd /var/lib/opsi/workbench && rm -rf '%pkgid%' '%pkgid%'_* '%pkgid%'.opsi* '%pkgdelete%' '%pkgdelete%'.opsi* 2>/dev/null; echo '[OK] Workbench bereinigt'"
-ssh %opsiuser%@%opsiserver% "cd /var/lib/opsi/repository && rm -rf '%pkgid%'* 2>/dev/null; echo '[OK] Repository bereinigt'"
-ssh %opsiuser%@%opsiserver% "cd /var/lib/opsi/depot && rm -rf '%pkgid%' 2>/dev/null; echo '[OK] Depot bereinigt'"
+echo Cleaning up workbench and repository...
+ssh %opsiuser%@%opsiserver% "cd /var/lib/opsi/workbench && rm -rf '%pkgid%' '%pkgid%'_* '%pkgid%'.opsi* '%pkgdelete%' '%pkgdelete%'.opsi* 2>/dev/null; echo '[OK] Workbench cleaned'"
+ssh %opsiuser%@%opsiserver% "cd /var/lib/opsi/repository && rm -rf '%pkgid%'* 2>/dev/null; echo '[OK] Repository cleaned'"
+ssh %opsiuser%@%opsiserver% "cd /var/lib/opsi/depot && rm -rf '%pkgid%' 2>/dev/null; echo '[OK] Depot cleaned'"
 
 echo.
-echo Pruefe ob Paket entfernt wurde...
+echo Checking if package was removed...
 ssh %opsiuser%@%opsiserver% "opsi-package-manager -l | grep -q -i '%pkgid%'"
 if errorlevel 1 (
-    echo [OK] Paket '%pkgid%' erfolgreich entfernt!
+    echo [OK] Package '%pkgid%' successfully removed!
     echo.
     pause
     goto menu
 )
 
-echo [INFO] Paket noch vorhanden - AGGRESSIVES LOESCHEN...
+echo [INFO] Package still present - AGGRESSIVE DELETE...
 echo.
 
-ssh %opsiuser%@%opsiserver% "echo '=== LOESCHE ALLES FUER %pkgid% ===' && \
+ssh %opsiuser%@%opsiserver% "echo '=== DELETING EVERYTHING FOR %pkgid% ===' && \
 opsi-admin -d method productOnClient_delete '*' '%pkgid%' 2>/dev/null; \
 opsi-admin -d method productPropertyState_delete '*' '%pkgid%' '*' 2>/dev/null; \
 opsi-admin -d method productDependency_delete '%pkgid%' '*' '*' '*' '*' 2>/dev/null; \
@@ -667,13 +667,13 @@ rm -rf /var/lib/opsi/depot/%pkgid% 2>/dev/null; \
 opsiconfd reload 2>/dev/null; \
 echo '=== DONE ==='"
 
-echo Finale Pruefung...
+echo Final check...
 ssh %opsiuser%@%opsiserver% "opsi-package-manager -l | grep -q -i '%pkgid%'"
 if errorlevel 1 (
-    echo [OK] Paket '%pkgid%' erfolgreich entfernt!
+    echo [OK] Package '%pkgid%' successfully removed!
 ) else (
-    echo [FEHLER] Paket '%pkgid%' konnte nicht entfernt werden!
-    echo Bitte manuell auf dem Server pruefen.
+    echo [ERROR] Package '%pkgid%' could not be removed!
+    echo Please check manually on the server.
 )
 
 echo.
@@ -683,27 +683,27 @@ goto menu
 :listpackages
 cls
 echo.
-echo === SERVER-PAKETE ANZEIGEN ===
+echo === SHOW SERVER PACKAGES ===
 echo.
-set /p opsiserver="OPSI-Server (Enter = 10.1.0.2): "
+set /p opsiserver="OPSI Server (Enter = 10.1.0.2): "
 if "%opsiserver%"=="" set opsiserver=10.1.0.2
-set /p opsiuser="SSH-Benutzer (Enter = root): "
+set /p opsiuser="SSH User (Enter = root): "
 if "%opsiuser%"=="" set opsiuser=root
 
 echo.
-echo Teste Server-Verbindung...
+echo Testing server connection...
 ping -n 1 %opsiserver% >nul 2>&1
 if errorlevel 1 (
-    echo [FEHLER] Server nicht erreichbar!
+    echo [ERROR] Server not reachable!
     pause
     goto menu
 )
 
 echo.
-echo ===== INSTALLIERTE PAKETE =====
+echo ===== INSTALLED PACKAGES =====
 ssh %opsiuser%@%opsiserver% "opsi-package-manager -l"
 echo.
-echo ===== WORKBENCH PAKETE =====
+echo ===== WORKBENCH PACKAGES =====
 ssh %opsiuser%@%opsiserver% "ls -la /var/lib/opsi/workbench/"
 echo.
 pause
@@ -712,74 +712,74 @@ goto menu
 :advanced
 cls
 echo.
-echo === ERWEITERTE OPTIONEN ===
+echo === ADVANCED OPTIONS ===
 echo.
-echo [1] SSH-Key einrichten
-echo [2] Server-Logs anzeigen
-echo [3] Client-Status pruefen
-echo [4] Depot synchronisieren
-echo [5] Zurueck zum Hauptmenue
+echo [1] Set up SSH key
+echo [2] Show server logs
+echo [3] Check client status
+echo [4] Synchronize depot
+echo [5] Back to main menu
 echo.
-set /p advchoice="Ihre Wahl: "
+set /p advchoice="Your choice: "
 
 if "%advchoice%"=="1" (
     echo.
-    echo === AUTOMATISCHES SSH-KEY SETUP ===
+    echo === AUTOMATIC SSH KEY SETUP ===
     echo.
-    set /p opsiserver="OPSI-Server (Enter = 10.1.0.2): "
+    set /p opsiserver="OPSI Server (Enter = 10.1.0.2): "
     if "!opsiserver!"=="" set opsiserver=10.1.0.2
-    set /p opsiuser="SSH-Benutzer (Enter = root): "
+    set /p opsiuser="SSH User (Enter = root): "
     if "!opsiuser!"=="" set opsiuser=root
     echo.
-    echo Schritt 1/4: Pruefe ob SSH-Key existiert...
+    echo Step 1/4: Checking if SSH key exists...
     if exist "%USERPROFILE%\.ssh\id_rsa.pub" (
-        echo [OK] SSH-Key bereits vorhanden
+        echo [OK] SSH key already exists
     ) else (
-        echo [INFO] Kein SSH-Key gefunden - erstelle neuen Key...
+        echo [INFO] No SSH key found - creating new key...
         echo.
         if not exist "%USERPROFILE%\.ssh" mkdir "%USERPROFILE%\.ssh"
         ssh-keygen -t rsa -b 4096 -f "%USERPROFILE%\.ssh\id_rsa" -N ""
         if errorlevel 1 (
-            echo [FEHLER] Key-Generierung fehlgeschlagen
-            echo Stellen Sie sicher dass OpenSSH installiert ist:
+            echo [ERROR] Key generation failed
+            echo Make sure OpenSSH is installed:
             echo   winget install Microsoft.OpenSSH.Client
             pause
             goto advanced
         )
-        echo [OK] SSH-Key erstellt
+        echo [OK] SSH key created
     )
     echo.
-    echo Schritt 2/4: Teste Server-Erreichbarkeit...
+    echo Step 2/4: Testing server reachability...
     ping -n 1 !opsiserver! >nul 2>&1
     if errorlevel 1 (
-        echo [FEHLER] Server !opsiserver! nicht erreichbar!
+        echo [ERROR] Server !opsiserver! not reachable!
         pause
         goto advanced
     )
-    echo [OK] Server erreichbar
+    echo [OK] Server reachable
     echo.
-    echo Schritt 3/4: Kopiere Public-Key auf Server...
-    echo [INFO] Sie werden nach dem Passwort fuer !opsiuser!@!opsiserver! gefragt
+    echo Step 3/4: Copying public key to server...
+    echo [INFO] You will be asked for the password for !opsiuser!@!opsiserver!
     echo.
     type "%USERPROFILE%\.ssh\id_rsa.pub" | ssh !opsiuser!@!opsiserver! "mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
     if errorlevel 1 (
-        echo [FEHLER] Key-Kopie fehlgeschlagen
+        echo [ERROR] Key copy failed
         pause
         goto advanced
     )
-    echo [OK] Public-Key auf Server kopiert
+    echo [OK] Public key copied to server
     echo.
-    echo Schritt 4/4: Teste passwortlose Verbindung...
-    ssh -o BatchMode=yes -o ConnectTimeout=5 !opsiuser!@!opsiserver! "echo SSH-Verbindung erfolgreich"
+    echo Step 4/4: Testing passwordless connection...
+    ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new !opsiuser!@!opsiserver! "echo SSH connection successful"
     if errorlevel 1 (
-        echo [WARNUNG] Passwortlose Verbindung noch nicht moeglich
-        echo Versuchen Sie es erneut oder pruefen Sie die Server-Konfiguration
+        echo [WARNING] Passwordless connection not yet possible
+        echo Try again or check the server configuration
     ) else (
         echo.
         echo ====================================
-        echo SSH-KEY SETUP ERFOLGREICH!
+        echo SSH KEY SETUP SUCCESSFUL!
         echo ====================================
-        echo Sie koennen sich jetzt ohne Passwort verbinden.
+        echo You can now connect without a password.
     )
     echo.
     pause
@@ -787,21 +787,21 @@ if "%advchoice%"=="1" (
 )
 
 if "%advchoice%"=="2" (
-    set /p opsiserver="OPSI-Server (Enter = 10.1.0.2): "
+    set /p opsiserver="OPSI Server (Enter = 10.1.0.2): "
     if "%opsiserver%"=="" set opsiserver=10.1.0.2
-    set /p opsiuser="SSH-Benutzer (Enter = root): "
+    set /p opsiuser="SSH User (Enter = root): "
     if "%opsiuser%"=="" set opsiuser=root
     echo.
-    echo === VERFUEGBARE LOG-DATEIEN ===
+    echo === AVAILABLE LOG FILES ===
     ssh %opsiuser%@%opsiserver% "ls -la /var/log/opsi/*.log 2>/dev/null | tail -10"
     echo.
-    echo === LETZTE PACKAGE.LOG EINTRAEGE ===
-    ssh %opsiuser%@%opsiserver% "if [ -f /var/log/opsi/package.log ]; then tail -20 /var/log/opsi/package.log; else echo 'package.log nicht gefunden'; fi"
+    echo === LATEST PACKAGE.LOG ENTRIES ===
+    ssh %opsiuser%@%opsiserver% "if [ -f /var/log/opsi/package.log ]; then tail -20 /var/log/opsi/package.log; else echo 'package.log not found'; fi"
     echo.
-    echo === LETZTE OPSICONFD.LOG EINTRAEGE ===
-    ssh %opsiuser%@%opsiserver% "if [ -f /var/log/opsi/opsiconfd.log ]; then tail -20 /var/log/opsi/opsiconfd.log; else echo 'opsiconfd.log nicht gefunden'; fi"
+    echo === LATEST OPSICONFD.LOG ENTRIES ===
+    ssh %opsiuser%@%opsiserver% "if [ -f /var/log/opsi/opsiconfd.log ]; then tail -20 /var/log/opsi/opsiconfd.log; else echo 'opsiconfd.log not found'; fi"
     echo.
-    echo === LETZTE CLIENT-LOGS ===
+    echo === LATEST CLIENT LOGS ===
     ssh %opsiuser%@%opsiserver% "ls -lt /var/log/opsi/clientconnect/*.log 2>/dev/null | head -5"
     pause
 )
@@ -809,11 +809,11 @@ if "%advchoice%"=="2" (
 if "%advchoice%"=="3" goto clientstatus
 
 if "%advchoice%"=="4" (
-    set /p opsiserver="OPSI-Server (Enter = 10.1.0.2): "
+    set /p opsiserver="OPSI Server (Enter = 10.1.0.2): "
     if "%opsiserver%"=="" set opsiserver=10.1.0.2
-    set /p opsiuser="SSH-Benutzer (Enter = root): "
+    set /p opsiuser="SSH User (Enter = root): "
     if "%opsiuser%"=="" set opsiuser=root
-    echo Synchronisiere Depot...
+    echo Synchronizing depot...
     ssh %opsiuser%@%opsiserver% "opsi-package-updater -v update"
     pause
 )
@@ -823,123 +823,123 @@ goto menu
 :clientstatus
 cls
 echo.
-echo === CLIENT-STATUS PRUEFEN ===
+echo === CHECK CLIENT STATUS ===
 echo.
 set opsiserver=10.1.0.2
 set opsiuser=root
-set /p opsiserver="OPSI-Server [%opsiserver%]: "
-set /p opsiuser="SSH-Benutzer [%opsiuser%]: "
+set /p opsiserver="OPSI Server [%opsiserver%]: "
+set /p opsiuser="SSH User [%opsiuser%]: "
 echo.
-echo Verbinde mit %opsiuser%@%opsiserver%...
+echo Connecting to %opsiuser%@%opsiserver%...
 echo.
-echo === REGISTRIERTE CLIENTS ===
+echo === REGISTERED CLIENTS ===
 ssh %opsiuser%@%opsiserver% opsi-admin -d method host_getIdents
-if errorlevel 1 echo [FEHLER] Konnte Clients nicht abrufen
+if errorlevel 1 echo [ERROR] Could not retrieve clients
 echo.
-echo === ERREICHBARE CLIENTS ===
+echo === REACHABLE CLIENTS ===
 ssh %opsiuser%@%opsiserver% "opsi-admin -d method hostControl_reachable | grep true"
-if errorlevel 1 echo [INFO] Keine erreichbaren Clients gefunden
+if errorlevel 1 echo [INFO] No reachable clients found
 echo.
-echo Fertig.
+echo Done.
 pause
 goto advanced
 
 :help
 cls
 echo.
-echo === HILFE ===
+echo === HELP ===
 echo.
-echo OPSI PackForge v2.0 - Professionelle OPSI-Paketverwaltung
+echo OPSI PackForge v2.0 - Professional OPSI Package Management
 echo.
-echo FUNKTIONEN:
+echo FEATURES:
 echo -----------
-echo [1] Neues Paket erstellen
-echo     - Vollstaendige Metadaten-Unterstuetzung
-echo     - Automatische Silent-Parameter Erkennung
-echo     - Multi-Datei Support
+echo [1] Create new package
+echo     - Full metadata support
+echo     - Automatic silent parameter detection
+echo     - Multi-file support
 echo.
-echo [2] Paket aktualisieren
-echo     - Setup-Dateien ersetzen
-echo     - Versionierung
-echo     - Live-Update im Depot
+echo [2] Update package
+echo     - Replace setup files
+echo     - Versioning
+echo     - Live update in depot
 echo.
-echo [3] Paket loeschen
-echo     - Sichere Entfernung vom Server
-echo     - Client-Pruefung
+echo [3] Delete package
+echo     - Safe removal from server
+echo     - Client check
 echo.
-echo [4] Server-Pakete anzeigen
-echo     - Installierte Pakete
-echo     - Workbench-Inhalte
+echo [4] Show server packages
+echo     - Installed packages
+echo     - Workbench contents
 echo.
-echo [5] Erweiterte Optionen
-echo     - SSH-Key Setup
-echo     - Log-Anzeige
-echo     - Client-Status
-echo     - Depot-Sync
+echo [5] Advanced options
+echo     - SSH key setup
+echo     - Log display
+echo     - Client status
+echo     - Depot sync
 echo.
-echo TIPPS:
+echo TIPS:
 echo ------
-echo - SSH-Keys einrichten fuer passwortlosen Zugriff
-echo - Setup-Dateien immer in CLIENT_DATA/files/ platzieren
-echo - Versionsnummern im Format X.Y.Z verwenden
+echo - Set up SSH keys for passwordless access
+echo - Always place setup files in CLIENT_DATA/files/
+echo - Use version numbers in X.Y.Z format
 echo.
-echo OPSI-Server: 10.1.0.2 (backup.paedml-linux.lokal)
+echo OPSI Server: 10.1.0.2 (backup.paedml-linux.lokal)
 echo GitHub: https://github.com/Elliot-Markus-John-Adams/opsi-packforge
 echo.
 pause
 goto menu
 '@
-        
+
         $batchScript | Out-File -FilePath "$appPath\opsi_packforge.bat" -Encoding ASCII
-        Write-Host "OK - Anwendung erstellt" -ForegroundColor Green
+        Write-Host "OK - Application created" -ForegroundColor Green
         Write-Host ""
-        
-        # Schritt 5
-        Write-Host "Schritt 5: Erstelle Desktop-Verknuepfung..." -ForegroundColor Yellow
+
+        # Step 5
+        Write-Host "Step 5: Creating desktop shortcut..." -ForegroundColor Yellow
         try {
             $desktopPath = [Environment]::GetFolderPath("Desktop")
             if (-not $desktopPath) {
                 $desktopPath = "$env:USERPROFILE\Desktop"
             }
-            
+
             $WshShell = New-Object -ComObject WScript.Shell
             $Shortcut = $WshShell.CreateShortcut("$desktopPath\OPSI PackForge.lnk")
             $Shortcut.TargetPath = "$appPath\opsi_packforge.bat"
             $Shortcut.WorkingDirectory = $appPath
             $Shortcut.Description = "OPSI PackForge"
             $Shortcut.Save()
-            Write-Host "OK - Desktop-Verknuepfung erstellt" -ForegroundColor Green
+            Write-Host "OK - Desktop shortcut created" -ForegroundColor Green
         } catch {
-            Write-Host "WARNUNG: Desktop-Verknuepfung konnte nicht erstellt werden" -ForegroundColor Yellow
-            Write-Host "         Starten Sie die Anwendung manuell:" -ForegroundColor Yellow
+            Write-Host "WARNING: Desktop shortcut could not be created" -ForegroundColor Yellow
+            Write-Host "         Start the application manually:" -ForegroundColor Yellow
             Write-Host "         $appPath\opsi_packforge.bat" -ForegroundColor Cyan
         }
         Write-Host ""
-        
-        Write-Host "Installation abgeschlossen!" -ForegroundColor Green
-        Write-Host "Installiert in: $installPath" -ForegroundColor Cyan
+
+        Write-Host "Installation complete!" -ForegroundColor Green
+        Write-Host "Installed in: $installPath" -ForegroundColor Cyan
         Write-Host ""
-        Write-Host "Starten mit:" -ForegroundColor Yellow
-        Write-Host "- Desktop-Verknuepfung 'OPSI PackForge'" -ForegroundColor White
-        Write-Host "- Oder direkt: $appPath\opsi_packforge.bat" -ForegroundColor White
+        Write-Host "Start with:" -ForegroundColor Yellow
+        Write-Host "- Desktop shortcut 'OPSI PackForge'" -ForegroundColor White
+        Write-Host "- Or directly: $appPath\opsi_packforge.bat" -ForegroundColor White
         Write-Host ""
-        
-        $startNow = Read-Host "Moechten Sie OPSI PackForge jetzt starten? (J/N)"
-        if ($startNow -eq "J" -or $startNow -eq "j") {
+
+        $startNow = Read-Host "Would you like to start OPSI PackForge now? (Y/N)"
+        if ($startNow -eq "Y" -or $startNow -eq "y") {
             Start-Process "$appPath\opsi_packforge.bat"
         }
     }
-    
+
     "2" {
-        Write-Host "Beende..." -ForegroundColor Yellow
+        Write-Host "Exiting..." -ForegroundColor Yellow
         exit
     }
-    
+
     default {
-        Write-Host "Ungueltige Auswahl!" -ForegroundColor Red
+        Write-Host "Invalid selection!" -ForegroundColor Red
     }
 }
 
 Write-Host ""
-Write-Host "Druecken Sie eine beliebige Taste zum Beenden..." -ForegroundColor Yellow
+Write-Host "Press any key to exit..." -ForegroundColor Yellow
 $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")

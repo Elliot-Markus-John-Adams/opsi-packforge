@@ -1,6 +1,6 @@
 # OPSI PackForge
 
-Tool für OPSI-Paketverwaltung in paedML Linux.
+Tool for OPSI package management in paedML Linux.
 
 ## Installation
 
@@ -9,48 +9,48 @@ Tool für OPSI-Paketverwaltung in paedML Linux.
 iex ((New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/Elliot-Markus-John-Adams/opsi-packforge/main/install.ps1'))
 ```
 
-## Was kann das Tool?
+## Features
 
-- Pakete erstellen, updaten und löschen
-- Direkt auf OPSI-Server deployen  
-- Workbench-Projekte verwalten
-- Logs anzeigen
+- Create, update and delete packages
+- Deploy directly to OPSI server
+- Manage workbench projects
+- View logs
 
-## Anforderungen
+## Requirements
 
 - Windows 10/11
 - PowerShell 5.1+
-- SSH Zugriff auf OPSI-Server (10.1.0.2)
+- SSH access to OPSI server (10.1.0.2)
 
 ## Changelog v2.0.1
 
 ### Fixes
-- `opsi-package-manager -r` funktioniert jetzt mit `TERM=dumb`
-- `opsi-makepackage --no-interactive` überschreibt automatisch
-- Workbench wird beim Löschen komplett aufgeräumt
+- `opsi-package-manager -r` now works with `TERM=dumb`
+- `opsi-makepackage --no-interactive` overwrites automatically
+- Workbench is completely cleaned up when deleting
 
-### Neue Features  
-- Zeigt installierte Pakete UND Workbench-Projekte beim Löschen
-- Kann mit Paket-IDs oder Workbench-Ordnernamen umgehen
-- Mehrere Log-Dateien in den erweiterten Optionen
+### New Features
+- Shows installed packages AND workbench projects when deleting
+- Can handle package IDs or workbench folder names
+- Multiple log files in advanced options
 
-## Bekannte Probleme
+## Known Issues
 
-Wenn ein Paket nicht richtig gelöscht wird:
+If a package is not deleted properly:
 ```bash
 ssh root@10.1.0.2
-opsi-package-manager -r paketname --purge
-rm -rf /var/lib/opsi/workbench/paketname*
+opsi-package-manager -r packagename --purge
+rm -rf /var/lib/opsi/workbench/packagename*
 ```
 
-## SSH ohne Passwort
+## SSH without Password
 
 ```bash
 ssh-keygen -t rsa -b 4096
 ssh-copy-id root@10.1.0.2
 ```
 
-## Silent-Parameter
+## Silent Parameters
 
 | Installer | Parameter |
 |-----------|-----------|
