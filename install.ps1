@@ -839,13 +839,10 @@ if "%advchoice%"=="2" (
     if "%opsiuser%"=="" set opsiuser=root
     echo.
     echo === AVAILABLE LOG FILES ===
-    ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "ls -la /var/log/opsi/*.log 2>/dev/null | tail -10"
+    ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "ls -la /var/log/opsi/*.log /var/log/opsi/opsiconfd/*.log 2>/dev/null | tail -15"
     echo.
-    echo === LATEST PACKAGE.LOG ENTRIES ===
-    ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "if [ -f /var/log/opsi/package.log ]; then tail -20 /var/log/opsi/package.log; else echo 'package.log not found'; fi"
-    echo.
-    echo === LATEST OPSICONFD.LOG ENTRIES ===
-    ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "if [ -f /var/log/opsi/opsiconfd.log ]; then tail -20 /var/log/opsi/opsiconfd.log; else echo 'opsiconfd.log not found'; fi"
+    echo === LATEST OPSICONFD LOG ENTRIES (package installs) ===
+    ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "if [ -d /var/log/opsi/opsiconfd ]; then cat /var/log/opsi/opsiconfd/*.log 2>/dev/null | grep -i 'package\|install\|product' | tail -20; elif [ -f /var/log/opsi/opsiconfd.log ]; then grep -i 'package\|install\|product' /var/log/opsi/opsiconfd.log | tail -20; else echo 'opsiconfd logs not found'; fi"
     echo.
     echo === LATEST CLIENT LOGS ===
     ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "ls -lt /var/log/opsi/clientconnect/*.log 2>/dev/null | head -5"
