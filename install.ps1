@@ -976,9 +976,16 @@ goto advanced
 :wolall
 echo.
 echo Waking all clients...
-ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "result=$(opsi-admin -d method hostControl_start 2>/dev/null); sent=$(echo \"$result\" | grep -c '\"result\": \"sent\"'); failed=$(echo \"$result\" | grep -c '\"error\":'); echo \"WOL packets sent: $sent\"; if [ $failed -gt 0 ]; then echo \"Errors: $failed\"; fi"
+ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "result=$(opsi-admin -d method hostControl_start 2>/dev/null); sent=$(echo \"$result\" | grep -c '\"result\": \"sent\"'); failed=$(echo \"$result\" | grep -v 'null' | grep -c '\"error\"'); echo \"WOL packets sent: $sent\"; if [ \"$failed\" != \"0\" ]; then echo \"Errors: $failed\"; fi"
 echo.
 echo [OK] WOL broadcast complete
+echo.
+set /p checkwolstatus="Watch clients coming online? (Y/N): "
+if /i not "%checkwolstatus%"=="Y" goto advanced
+echo.
+echo === WATCHING FOR CLIENTS (Press Ctrl+C to stop) ===
+echo.
+ssh -o ConnectTimeout=300 %opsiuser%@%opsiserver% "seen=''; count=0; total=$(opsi-admin -d method host_getIdents 2>/dev/null | grep -c '\\.'); for i in $(seq 1 24); do while read client; do if ! echo \"$seen\" | grep -q \"$client\"; then seen=\"$seen $client\"; count=$((count+1)); echo \"[ONLINE] $client ($count clients)\"; fi; done < <(opsi-admin -d method hostControl_reachable 2>/dev/null | grep -B1 true | grep -oE '\"[^\"]+\\.[^\"]+\"' | tr -d '\"'); sleep 5; done; echo ''; echo \"=== DONE: $count / $total clients online ===\""
 pause
 goto advanced
 
