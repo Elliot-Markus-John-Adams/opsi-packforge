@@ -707,20 +707,7 @@ if errorlevel 1 (
 echo [INFO] Package still present - AGGRESSIVE DELETE...
 echo.
 
-ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "echo '=== DELETING EVERYTHING FOR %pkgid% ===' && \
-opsi-admin -d method productOnClient_delete '*' '%pkgid%' 2>/dev/null; \
-opsi-admin -d method productPropertyState_delete '*' '%pkgid%' '*' 2>/dev/null; \
-opsi-admin -d method productDependency_delete '%pkgid%' '*' '*' '*' '*' 2>/dev/null; \
-opsi-admin -d method productProperty_delete '%pkgid%' '*' '*' 2>/dev/null; \
-opsi-admin -d method productOnDepot_delete '%pkgid%' '*' 2>/dev/null; \
-opsi-admin -d method product_delete '%pkgid%' 2>/dev/null; \
-opsi-package-manager -r '%pkgid%' --purge 2>/dev/null; \
-opsi-package-manager -r '%pkgid%' 2>/dev/null; \
-rm -rf /var/lib/opsi/workbench/%pkgid%* /var/lib/opsi/workbench/%pkgdelete%* 2>/dev/null; \
-rm -rf /var/lib/opsi/repository/%pkgid%* 2>/dev/null; \
-rm -rf /var/lib/opsi/depot/%pkgid% 2>/dev/null; \
-opsiconfd reload 2>/dev/null; \
-echo '=== DONE ==='"
+ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "echo '=== DELETING EVERYTHING FOR %pkgid% ==='; opsi-admin -d method productOnClient_delete '*' '%pkgid%' 2>/dev/null; opsi-admin -d method productPropertyState_delete '*' '%pkgid%' '*' 2>/dev/null; opsi-admin -d method productDependency_delete '%pkgid%' '*' '*' '*' '*' 2>/dev/null; opsi-admin -d method productProperty_delete '%pkgid%' '*' '*' 2>/dev/null; opsi-admin -d method productOnDepot_delete '%pkgid%' '*' 2>/dev/null; opsi-admin -d method product_delete '%pkgid%' 2>/dev/null; opsi-package-manager -r '%pkgid%' --purge 2>/dev/null; opsi-package-manager -r '%pkgid%' 2>/dev/null; rm -rf /var/lib/opsi/workbench/%pkgid%* /var/lib/opsi/workbench/%pkgdelete%* 2>/dev/null; rm -rf /var/lib/opsi/repository/%pkgid%* 2>/dev/null; rm -rf /var/lib/opsi/depot/%pkgid% 2>/dev/null; opsiconfd reload 2>/dev/null; echo '=== DONE ==='"
 
 echo Final check...
 ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "opsi-package-manager -l | grep -q -i '%pkgid%'"
@@ -936,6 +923,19 @@ goto advanced
 
 :wolsingle
 set /p wolclient="Enter client FQDN: "
+
+REM Auto-complete FQDN if user entered short name (no dots)
+echo %wolclient% | find "." >nul
+if errorlevel 1 (
+    echo Resolving full FQDN for '%wolclient%'...
+    for /f "delims=" %%i in ('ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "opsi-admin -d method host_getIdents | tr -d '[]\",' | grep -i '^%wolclient%\.' | head -1"') do set wolclient=%%i
+    if "!wolclient!"=="" (
+        echo [ERROR] Client not found
+        pause
+        goto advanced
+    )
+    echo Found: !wolclient!
+)
 echo.
 echo Sending WOL packet to %wolclient%...
 ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "opsi-admin -d method hostControl_start '%wolclient%'"
@@ -991,6 +991,19 @@ goto advanced
 
 :sdsingle
 set /p sdclient="Enter client FQDN: "
+
+REM Auto-complete FQDN if user entered short name (no dots)
+echo %sdclient% | find "." >nul
+if errorlevel 1 (
+    echo Resolving full FQDN for '%sdclient%'...
+    for /f "delims=" %%i in ('ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "opsi-admin -d method host_getIdents | tr -d '[]\",' | grep -i '^%sdclient%\.' | head -1"') do set sdclient=%%i
+    if "!sdclient!"=="" (
+        echo [ERROR] Client not found
+        pause
+        goto advanced
+    )
+    echo Found: !sdclient!
+)
 echo.
 echo Shutting down %sdclient%...
 ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "opsi-admin -d method hostControlSafe_shutdown '%sdclient%'"
@@ -1046,6 +1059,19 @@ goto advanced
 
 :rbsingle
 set /p rbclient="Enter client FQDN: "
+
+REM Auto-complete FQDN if user entered short name (no dots)
+echo %rbclient% | find "." >nul
+if errorlevel 1 (
+    echo Resolving full FQDN for '%rbclient%'...
+    for /f "delims=" %%i in ('ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "opsi-admin -d method host_getIdents | tr -d '[]\",' | grep -i '^%rbclient%\.' | head -1"') do set rbclient=%%i
+    if "!rbclient!"=="" (
+        echo [ERROR] Client not found
+        pause
+        goto advanced
+    )
+    echo Found: !rbclient!
+)
 echo.
 echo Rebooting %rbclient%...
 ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "opsi-admin -d method hostControlSafe_reboot '%rbclient%'"
@@ -1088,6 +1114,19 @@ echo Fetching client list...
 ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "opsi-admin -d method host_getIdents"
 echo.
 set /p execclient="Enter client FQDN: "
+
+REM Auto-complete FQDN if user entered short name (no dots)
+echo %execclient% | find "." >nul
+if errorlevel 1 (
+    echo Resolving full FQDN for '%execclient%'...
+    for /f "delims=" %%i in ('ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "opsi-admin -d method host_getIdents | tr -d '[]\",' | grep -i '^%execclient%\.' | head -1"') do set execclient=%%i
+    if "!execclient!"=="" (
+        echo [ERROR] Client '%execclient%' not found
+        pause
+        goto advanced
+    )
+    echo Found: !execclient!
+)
 echo.
 echo Example commands:
 echo   - cmd.exe /c "ipconfig /all"
