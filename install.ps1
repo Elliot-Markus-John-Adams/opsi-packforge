@@ -841,7 +841,7 @@ if "%advchoice%"=="2" (
     echo === AVAILABLE LOG FILES ===
     ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "ls -la /var/log/opsi/*.log /var/log/opsi/opsiconfd/*.log 2>/dev/null | tail -15"
     echo.
-    echo === LATEST OPSICONFD LOG ENTRIES (package installs) ===
+    echo === LATEST OPSICONFD LOG ENTRIES ===
     ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "if [ -d /var/log/opsi/opsiconfd ]; then cat /var/log/opsi/opsiconfd/*.log 2>/dev/null | grep -i 'package\|install\|product' | tail -20; elif [ -f /var/log/opsi/opsiconfd.log ]; then grep -i 'package\|install\|product' /var/log/opsi/opsiconfd.log | tail -20; else echo 'opsiconfd logs not found'; fi"
     echo.
     echo === LATEST CLIENT LOGS ===
