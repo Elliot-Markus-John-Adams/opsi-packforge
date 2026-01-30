@@ -957,24 +957,10 @@ echo.
 set /p checkstatus="Check if client comes online? (Y/N): "
 if /i not "%checkstatus%"=="Y" goto advanced
 echo.
-echo Waiting for client to boot (checking every 10 seconds)...
+echo Waiting for client to boot...
 echo Press Ctrl+C to cancel
 echo.
-for /L %%i in (1,1,12) do (
-    timeout /t 10 /nobreak >nul
-    echo [%%i/12] Checking %wolclient%...
-    for /f "delims=" %%r in ('ssh -o ConnectTimeout=5 %opsiuser%@%opsiserver% "opsi-admin -d method hostControl_reachable '%wolclient%' 2>/dev/null | grep -c true"') do (
-        if "%%r"=="1" (
-            echo.
-            echo [OK] %wolclient% is now ONLINE!
-            pause
-            goto advanced
-        )
-    )
-)
-echo.
-echo [INFO] Client did not respond after 2 minutes
-echo        It may still be booting or is unreachable
+ssh -o ConnectTimeout=120 %opsiuser%@%opsiserver% "for i in 1 2 3 4 5 6 7 8 9 10 11 12; do sleep 10; echo \"[Check $i/12] Checking %wolclient%...\"; if opsi-admin -d method hostControl_reachable '%wolclient%' 2>/dev/null | grep -q true; then echo ''; echo '[OK] %wolclient% is now ONLINE!'; exit 0; fi; done; echo ''; echo '[INFO] Client did not respond after 2 minutes'"
 pause
 goto advanced
 
