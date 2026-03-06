@@ -596,7 +596,7 @@ set /p pkgupdate="Which package to update? (Enter package ID): "
 
 echo.
 echo Checking if workbench folder exists...
-ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "if [ -d /var/lib/opsi/workbench/%pkgupdate%_* ]; then echo 'Workbench folder found'; else echo 'No workbench folder - copying from depot...'; cp -r /var/lib/opsi/depot/%pkgupdate% /var/lib/opsi/workbench/%pkgupdate%_update 2>/dev/null || echo '[WARNING] Depot folder not found'; fi"
+ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "if ls -d /var/lib/opsi/workbench/%pkgupdate%_* 1>/dev/null 2>&1 || [ -d /var/lib/opsi/workbench/%pkgupdate% ]; then echo 'Workbench folder found'; else echo 'No workbench folder - copying from depot...'; cp -r /var/lib/opsi/depot/%pkgupdate% /var/lib/opsi/workbench/ 2>/dev/null || echo '[WARNING] Depot folder not found'; fi"
 
 echo.
 set /p newversion="New version (Enter = keep version): "
@@ -612,15 +612,22 @@ if "%updatetype%"=="1" (
     echo.
     set /p newsetup="Path to new setup file: "
     echo Copying new setup file to server...
-    ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "find /var/lib/opsi/workbench -maxdepth 2 -name '%pkgupdate%*' -type d | head -1" > %temp%\pkgdir.txt
+    ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "find /var/lib/opsi/workbench -maxdepth 1 -name '%pkgupdate%*' -type d | head -1" > %temp%\pkgdir.txt
     set /p pkgdir=<%temp%\pkgdir.txt
-    scp "%newsetup%" %opsiuser%@%opsiserver%:%pkgdir%/CLIENT_DATA/files/
+    scp "%newsetup%" %opsiuser%@%opsiserver%:!pkgdir!/CLIENT_DATA/files/
     echo [OK] Setup file updated
+)
+
+REM Update version in control file if new version specified
+if not "%newversion%"=="" (
+    echo.
+    echo Updating version to %newversion% in control file...
+    ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "pkgdir=$(find /var/lib/opsi/workbench -maxdepth 1 -name '%pkgupdate%*' -type d | head -1); if [ -n \"$pkgdir\" ]; then sed -i 's/^version: .*/version: %newversion%/' \"$pkgdir/OPSI/control\" && echo '[OK] Version updated'; else echo '[ERROR] Control file not found'; fi"
 )
 
 echo.
 echo Searching workbench folder and rebuilding package...
-ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "pkgdir=$(find /var/lib/opsi/workbench -maxdepth 2 -name '%pkgupdate%*' -type d | head -1); if [ -n \"$pkgdir\" ]; then cd \"$pkgdir\" && cd .. && opsi-makepackage \"$(basename $pkgdir)\"; else echo '[ERROR] No workbench folder found'; fi"
+ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "pkgdir=$(find /var/lib/opsi/workbench -maxdepth 1 -name '%pkgupdate%*' -type d | head -1); if [ -n \"$pkgdir\" ]; then cd /var/lib/opsi/workbench && opsi-makepackage \"$(basename $pkgdir)\"; else echo '[ERROR] No workbench folder found'; fi"
 echo.
 echo Installing updated package...
 ssh -o ConnectTimeout=10 %opsiuser%@%opsiserver% "latest=$(ls -t /var/lib/opsi/workbench/%pkgupdate%*.opsi 2>/dev/null | head -1); if [ -n \"$latest\" ]; then opsi-package-manager -q -i \"$latest\"; else echo '[ERROR] No package found'; fi"
