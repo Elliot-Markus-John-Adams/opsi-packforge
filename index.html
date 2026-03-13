@@ -406,13 +406,6 @@
                 </div>
                 <textarea id="pkgAdvice" placeholder="Optional usage notes"></textarea>
             </div>
-            <div style="margin-top: 12px;">
-                <div class="label-row">
-                    <label>Product Classes</label>
-                    <span class="info">i<span class="tip">Comma-separated categories for filtering</span></span>
-                </div>
-                <input type="text" id="pkgClasses" placeholder="e.g. browser, office, tools">
-            </div>
         </section>
 
         <section>
@@ -948,7 +941,6 @@ Message "Running user login script for " + $ProductId$ + "..."
                 license: document.getElementById('pkgLicense').value,
                 desc: document.getElementById('pkgDesc').value.trim(),
                 advice: document.getElementById('pkgAdvice').value.trim(),
-                productClasses: document.getElementById('pkgClasses').value.trim(),
                 setupFile: selectedFiles.length ? selectedFiles[0].name : 'setup.exe',
                 type: selectedType,
                 params: currentParams.join(' '),
@@ -978,7 +970,7 @@ advice: ${d.advice}
 version: ${d.version || '1.0'}
 priority: ${d.priority}
 licenseRequired: ${d.license}
-productClasses: ${d.productClasses}
+productClasses:
 setupScript: setup.opsiscript
 uninstallScript: uninstall.opsiscript
 updateScript: ${hasUpdate ? 'update.opsiscript' : ''}
