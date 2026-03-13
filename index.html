@@ -182,9 +182,36 @@
             margin-top: 6px;
             font-size: 13px;
         }
+        .file-item.is-installer { border-color: #0af; background: #0a1a2a; }
         .file-item .icon { opacity: 0.6; }
         .file-item .name { flex: 1; color: #ccc; }
         .file-item .size { color: #666; font-size: 11px; }
+        .file-item .install-toggle {
+            font-size: 11px;
+            padding: 3px 8px;
+            border: 1px solid #444;
+            background: #222;
+            color: #666;
+            cursor: pointer;
+        }
+        .file-item .install-toggle:hover { border-color: #666; }
+        .file-item .install-toggle.active {
+            background: #0a2a3a;
+            border-color: #0af;
+            color: #0af;
+        }
+        .file-item .order-num {
+            background: #0af;
+            color: #000;
+            font-size: 10px;
+            font-weight: bold;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
         .file-item .remove {
             color: #666;
             cursor: pointer;
@@ -780,23 +807,30 @@
         };
 
         function handleFiles(files) {
+            const executableExts = ['exe', 'msi', 'ps1', 'bat', 'cmd'];
+
             for (const file of files) {
                 if (!selectedFiles.some(f => f.name === file.name)) {
+                    const ext = file.name.split('.').pop().toLowerCase();
+                    // Auto-mark executables as installers
+                    file.isInstaller = executableExts.includes(ext);
                     selectedFiles.push(file);
                 }
             }
             renderFileList();
 
-            // Auto-detect installer type from first exe/msi
+            // Auto-detect installer type from first installer file
             if (!selectedType) {
                 for (const file of selectedFiles) {
-                    const ext = file.name.split('.').pop().toLowerCase();
-                    const typeMap = { msi: 'msi', exe: 'exe', ps1: 'ps1', bat: 'bat' };
-                    if (typeMap[ext]) {
-                        document.querySelectorAll('.type-btn').forEach(btn => {
-                            if (btn.dataset.type === typeMap[ext]) btn.click();
-                        });
-                        break;
+                    if (file.isInstaller) {
+                        const ext = file.name.split('.').pop().toLowerCase();
+                        const typeMap = { msi: 'msi', exe: 'exe', ps1: 'ps1', bat: 'bat', cmd: 'bat' };
+                        if (typeMap[ext]) {
+                            document.querySelectorAll('.type-btn').forEach(btn => {
+                                if (btn.dataset.type === typeMap[ext]) btn.click();
+                            });
+                            break;
+                        }
                     }
                 }
             }
@@ -804,17 +838,33 @@
 
         function renderFileList() {
             const list = document.getElementById('fileList');
-            list.innerHTML = selectedFiles.map((f, i) => `
-                <div class="file-item">
-                    <span class="icon">📄</span>
+            // Get installer order
+            const installers = selectedFiles
+                .map((f, i) => ({ file: f, index: i }))
+                .filter(x => x.file.isInstaller);
+
+            list.innerHTML = selectedFiles.map((f, i) => {
+                const isInstaller = f.isInstaller;
+                const orderNum = isInstaller ? installers.findIndex(x => x.index === i) + 1 : 0;
+                return `
+                <div class="file-item ${isInstaller ? 'is-installer' : ''}">
+                    ${isInstaller ? `<span class="order-num">${orderNum}</span>` : '<span class="icon">📄</span>'}
                     <span class="name">${f.name}</span>
                     <span class="size">${formatSize(f.size)}</span>
-                    <span class="remove" onclick="removeFile(${i})">×</span>
+                    <button class="install-toggle ${isInstaller ? 'active' : ''}" onclick="toggleInstaller(${i})">
+                        ${isInstaller ? '✓ Install' : 'Mark as installer'}
+                    </button>
+                    <span class="remove" onclick="removeDroppedFile(${i})">×</span>
                 </div>
-            `).join('');
+            `}).join('');
         }
 
-        function removeFile(index) {
+        function toggleInstaller(index) {
+            selectedFiles[index].isInstaller = !selectedFiles[index].isInstaller;
+            renderFileList();
+        }
+
+        function removeDroppedFile(index) {
             selectedFiles.splice(index, 1);
             renderFileList();
         }
@@ -1115,6 +1165,9 @@ Message "Running user login script for " + $ProductId$ + "..."
         });
 
         function getData() {
+            // Get installer files in order
+            const installerFiles = selectedFiles.filter(f => f.isInstaller).map(f => f.name);
+
             return {
                 id: document.getElementById('pkgId').value.trim(),
                 name: document.getElementById('pkgName').value.trim(),
@@ -1124,7 +1177,8 @@ Message "Running user login script for " + $ProductId$ + "..."
                 license: document.getElementById('pkgLicense').value,
                 desc: document.getElementById('pkgDesc').value.trim(),
                 advice: document.getElementById('pkgAdvice').value.trim(),
-                setupFile: selectedFiles.length ? selectedFiles[0].name : 'setup.exe',
+                installerFiles: installerFiles,
+                setupFile: installerFiles[0] || 'setup.exe',
                 type: selectedType,
                 params: currentParams.join(' '),
                 dependencies: dependencies.filter(d => d.requiredProduct),
@@ -1192,16 +1246,11 @@ default: [${defaultVal}]`;
 
         function makeSetup(d) {
             const params = d.params ? d.params + ' ' : '';
-
-            // Determine exit code function based on installer type
-            let exitCodeFunc = 'isGenericExitcodeFatal';
-            if (d.type === 'msi') exitCodeFunc = 'isMsiExitcodeFatal';
-            else if (d.type === 'inno') exitCodeFunc = 'isInnoExitcodeFatal';
-            else if (d.type === 'nsis') exitCodeFunc = 'isNsisExitcodeFatal';
-            else if (d.type === 'installshield') exitCodeFunc = 'isInstallshieldExitcodeFatal';
+            const installers = d.installerFiles || [d.setupFile];
 
             if (d.type === 'ps1' || d.type === 'bat') {
-                return `[Actions]
+                // Shell-based installers
+                let script = `[Actions]
 requiredOpsiscriptVersion >= "4.12.5.0"
 
 DefVar $ProductId$
@@ -1210,20 +1259,32 @@ DefVar $ExitCode$
 Set $ProductId$ = "${d.id}"
 
 Message "Installing " + $ProductId$ + "..."
-
-ShellCall_Install
+`;
+                installers.forEach((file, i) => {
+                    script += `
+comment "Installing ${file}..."
+ShellCall_Install_${i + 1}
 
 set $ExitCode$ = getLastExitCode
 if not ($ExitCode$ = "0")
-	logError "Installation failed with exit code: " + $ExitCode$
+	logError "Installation of ${file} failed with exit code: " + $ExitCode$
 	isFatalError "Installation failed"
 endif
+`;
+                });
 
-[ShellCall_Install]
-${params}"%ScriptPath%\\${d.setupFile}"`;
+                installers.forEach((file, i) => {
+                    script += `
+[ShellCall_Install_${i + 1}]
+${params}"%ScriptPath%\\${file}"
+`;
+                });
+
+                return script;
             }
 
-            return `[Actions]
+            // Winbatch-based installers (exe, msi, etc)
+            let script = `[Actions]
 requiredOpsiscriptVersion >= "4.12.5.0"
 
 DefVar $ProductId$
@@ -1234,17 +1295,28 @@ Set $ProductId$ = "${d.id}"
 Set $LogDir$ = "%opsiLogDir%"
 
 Message "Installing " + $ProductId$ + "..."
-
-Winbatch_Install
+`;
+            installers.forEach((file, i) => {
+                script += `
+comment "Installing ${file}..."
+Winbatch_Install_${i + 1}
 
 set $ExitCode$ = getLastExitCode
 if not ($ExitCode$ = "0")
-	logError "Installation failed with exit code: " + $ExitCode$
+	logError "Installation of ${file} failed with exit code: " + $ExitCode$
 	isFatalError "Installation failed"
 endif
+`;
+            });
 
-[Winbatch_Install]
-${params}"%ScriptPath%\\${d.setupFile}"`;
+            installers.forEach((file, i) => {
+                script += `
+[Winbatch_Install_${i + 1}]
+${params}"%ScriptPath%\\${file}"
+`;
+            });
+
+            return script;
         }
 
         function makeUninstall(d) {
