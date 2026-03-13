@@ -491,6 +491,7 @@
                 <button class="type-btn" data-type="installshield" data-params="/s,/sms">InstallShield</button>
                 <button class="type-btn" data-type="exe" data-params="">EXE (other)</button>
                 <button class="type-btn" data-type="ps1" data-params="powershell,-ExecutionPolicy,Bypass,-File">PowerShell</button>
+                <button class="type-btn" data-type="bat" data-params="cmd.exe,/c">Batch</button>
             </div>
 
             <div class="params-container" id="paramsContainer">
@@ -790,7 +791,7 @@
             if (!selectedType) {
                 for (const file of selectedFiles) {
                     const ext = file.name.split('.').pop().toLowerCase();
-                    const typeMap = { msi: 'msi', exe: 'exe', ps1: 'ps1' };
+                    const typeMap = { msi: 'msi', exe: 'exe', ps1: 'ps1', bat: 'bat' };
                     if (typeMap[ext]) {
                         document.querySelectorAll('.type-btn').forEach(btn => {
                             if (btn.dataset.type === typeMap[ext]) btn.click();
@@ -1199,7 +1200,7 @@ default: [${defaultVal}]`;
             else if (d.type === 'nsis') exitCodeFunc = 'isNsisExitcodeFatal';
             else if (d.type === 'installshield') exitCodeFunc = 'isInstallshieldExitcodeFatal';
 
-            if (d.type === 'ps1') {
+            if (d.type === 'ps1' || d.type === 'bat') {
                 return `[Actions]
 requiredOpsiscriptVersion >= "4.12.5.0"
 
