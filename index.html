@@ -396,7 +396,21 @@
                 <div class="label-row">
                     <label>Description</label>
                 </div>
-                <textarea id="pkgDesc" placeholder="Optional"></textarea>
+                <textarea id="pkgDesc" placeholder="Product description"></textarea>
+            </div>
+            <div style="margin-top: 12px;">
+                <div class="label-row">
+                    <label>Advice</label>
+                    <span class="info">i<span class="tip">Additional notes shown in opsi-configed</span></span>
+                </div>
+                <textarea id="pkgAdvice" placeholder="Optional usage notes"></textarea>
+            </div>
+            <div style="margin-top: 12px;">
+                <div class="label-row">
+                    <label>Product Classes</label>
+                    <span class="info">i<span class="tip">Comma-separated categories for filtering</span></span>
+                </div>
+                <input type="text" id="pkgClasses" placeholder="e.g. browser, office, tools">
             </div>
         </section>
 
@@ -712,7 +726,58 @@
         const optionalFiles = {
             'OPSI/preinst': '#!/bin/bash\n# Runs on depot BEFORE package is installed\n# Available: $PRODUCT_ID, $PRODUCT_VERSION, $CLIENT_DATA_DIR\n\nexit 0',
             'OPSI/postinst': '#!/bin/bash\n# Runs on depot AFTER package is installed\n# Available: $PRODUCT_ID, $PRODUCT_VERSION, $CLIENT_DATA_DIR\n\nexit 0',
-            'OPSI/changelog.txt': ''
+            'OPSI/changelog.txt': '',
+            'CLIENT_DATA/update.opsiscript': `[Actions]
+requiredOpsiscriptVersion >= "4.12.5.0"
+
+DefVar $ProductId$
+
+Set $ProductId$ = "YOURPRODUCT"
+
+Message "Updating " + $ProductId$ + "..."
+
+; Update logic here`,
+            'CLIENT_DATA/always.opsiscript': `[Actions]
+requiredOpsiscriptVersion >= "4.12.5.0"
+
+DefVar $ProductId$
+
+Set $ProductId$ = "YOURPRODUCT"
+
+Message "Running always script for " + $ProductId$ + "..."
+
+; Runs on every action`,
+            'CLIENT_DATA/once.opsiscript': `[Actions]
+requiredOpsiscriptVersion >= "4.12.5.0"
+
+DefVar $ProductId$
+
+Set $ProductId$ = "YOURPRODUCT"
+
+Message "Running once script for " + $ProductId$ + "..."
+
+; Runs only once per client`,
+            'CLIENT_DATA/custom.opsiscript': `[Actions]
+requiredOpsiscriptVersion >= "4.12.5.0"
+
+DefVar $ProductId$
+
+Set $ProductId$ = "YOURPRODUCT"
+
+Message "Running custom script for " + $ProductId$ + "..."
+
+; Custom action script`,
+            'CLIENT_DATA/userlogin.opsiscript': `[Actions]
+requiredOpsiscriptVersion >= "4.12.5.0"
+
+DefVar $ProductId$
+
+Set $ProductId$ = "YOURPRODUCT"
+
+Message "Running user login script for " + $ProductId$ + "..."
+
+; Runs in user context at login
+; Can access user profile folders`
         };
 
         function generateProject() {
@@ -747,28 +812,44 @@
             html += renderFileItem('OPSI/control');
 
             // Optional OPSI files
-            if (!projectFiles['OPSI/preinst']) {
-                html += renderOptionalFile('OPSI/preinst');
-            } else {
-                html += renderFileItem('OPSI/preinst');
-            }
-            if (!projectFiles['OPSI/postinst']) {
-                html += renderOptionalFile('OPSI/postinst');
-            } else {
-                html += renderFileItem('OPSI/postinst');
-            }
-            if (!projectFiles['OPSI/changelog.txt']) {
-                html += renderOptionalFile('OPSI/changelog.txt');
-            } else {
-                html += renderFileItem('OPSI/changelog.txt');
-            }
+            const opsiOptional = ['OPSI/preinst', 'OPSI/postinst', 'OPSI/changelog.txt'];
+            opsiOptional.forEach(path => {
+                if (projectFiles[path]) {
+                    html += renderFileItem(path);
+                } else {
+                    html += renderOptionalFile(path);
+                }
+            });
 
             // CLIENT_DATA folder
             html += `<div class="tree-folder" style="margin-left:15px;">CLIENT_DATA/</div>`;
 
-            Object.keys(projectFiles).filter(k => k.startsWith('CLIENT_DATA/')).forEach(path => {
-                html += renderFileItem(path);
+            // Core scripts first
+            html += renderFileItem('CLIENT_DATA/setup.opsiscript');
+            html += renderFileItem('CLIENT_DATA/uninstall.opsiscript');
+
+            // Optional CLIENT_DATA scripts
+            const clientOptional = [
+                'CLIENT_DATA/update.opsiscript',
+                'CLIENT_DATA/always.opsiscript',
+                'CLIENT_DATA/once.opsiscript',
+                'CLIENT_DATA/custom.opsiscript',
+                'CLIENT_DATA/userlogin.opsiscript'
+            ];
+            clientOptional.forEach(path => {
+                if (projectFiles[path]) {
+                    html += renderFileItem(path);
+                } else {
+                    html += renderOptionalFile(path);
+                }
             });
+
+            // Binary files (dropped installers etc)
+            Object.keys(projectFiles)
+                .filter(k => k.startsWith('CLIENT_DATA/') && projectFiles[k]?.binary)
+                .forEach(path => {
+                    html += renderFileItem(path);
+                });
 
             tree.innerHTML = html;
         }
@@ -803,16 +884,26 @@
         }
 
         function addOptionalFile(path) {
-            projectFiles[path] = optionalFiles[path] || '';
+            const d = getData();
+            let content = optionalFiles[path] || '';
+
+            // Replace YOURPRODUCT with actual product ID
+            content = content.replace(/YOURPRODUCT/g, d.id || 'myproduct');
+
             if (path === 'OPSI/changelog.txt') {
-                const d = getData();
-                projectFiles[path] = `${d.id} (${d.version || '1.0'}-1) stable; urgency=low
+                content = `${d.id} (${d.version || '1.0'}-1) stable; urgency=low
 
   * Initial release
 
  -- Your Name <your@email.com>  ${new Date().toUTCString()}`;
             }
-            renderFileTree(getData().id);
+
+            projectFiles[path] = content;
+
+            // Regenerate control to update script references
+            projectFiles['OPSI/control'] = makeControl(d);
+
+            renderFileTree(d.id);
             editFile(path);
         }
 
@@ -849,6 +940,8 @@
                 priority: document.getElementById('pkgPriority').value || '0',
                 license: document.getElementById('pkgLicense').value,
                 desc: document.getElementById('pkgDesc').value.trim(),
+                advice: document.getElementById('pkgAdvice').value.trim(),
+                productClasses: document.getElementById('pkgClasses').value.trim(),
                 setupFile: selectedFiles.length ? selectedFiles[0].name : 'setup.exe',
                 type: selectedType,
                 params: currentParams.join(' '),
@@ -858,6 +951,13 @@
         }
 
         function makeControl(d) {
+            // Check which optional scripts are added
+            const hasUpdate = projectFiles['CLIENT_DATA/update.opsiscript'];
+            const hasAlways = projectFiles['CLIENT_DATA/always.opsiscript'];
+            const hasOnce = projectFiles['CLIENT_DATA/once.opsiscript'];
+            const hasCustom = projectFiles['CLIENT_DATA/custom.opsiscript'];
+            const hasUserLogin = projectFiles['CLIENT_DATA/userlogin.opsiscript'];
+
             let control = `[Package]
 version: ${d.packageVersion}
 depends:
@@ -867,18 +967,18 @@ type: localboot
 id: ${d.id}
 name: ${d.name}
 description: ${d.desc || d.name}
-advice:
+advice: ${d.advice}
 version: ${d.version || '1.0'}
 priority: ${d.priority}
 licenseRequired: ${d.license}
-productClasses:
+productClasses: ${d.productClasses}
 setupScript: setup.opsiscript
 uninstallScript: uninstall.opsiscript
-updateScript:
-alwaysScript:
-onceScript:
-customScript:
-userLoginScript:`;
+updateScript: ${hasUpdate ? 'update.opsiscript' : ''}
+alwaysScript: ${hasAlways ? 'always.opsiscript' : ''}
+onceScript: ${hasOnce ? 'once.opsiscript' : ''}
+customScript: ${hasCustom ? 'custom.opsiscript' : ''}
+userLoginScript: ${hasUserLogin ? 'userlogin.opsiscript' : ''}`;
 
             // Add dependencies
             d.dependencies.forEach(dep => {
