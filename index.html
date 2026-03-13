@@ -233,8 +233,14 @@
             font-size: 12px;
             color: #0af;
         }
-        .editor-close { cursor: pointer; color: #666; font-size: 18px; }
-        .editor-close:hover { color: #fff; }
+        .editor-close {
+            cursor: pointer;
+            color: #666;
+            font-size: 20px;
+            padding: 0 5px;
+            line-height: 1;
+        }
+        .editor-close:hover { color: #f55; }
         #editorContent {
             width: 100%;
             min-height: 300px;
@@ -248,13 +254,16 @@
         }
         .btn-save {
             width: 100%;
-            padding: 8px;
+            padding: 10px;
             background: #0a0;
             color: #000;
             font-weight: 600;
             cursor: pointer;
+            border: none;
+            font-size: 14px;
         }
         .btn-save:hover { background: #0c0; }
+        .btn-save:active { background: #080; }
 
         .actions { display: flex; gap: 10px; margin-top: 20px; }
         button {
@@ -626,11 +635,21 @@
         function saveEditor() {
             if (currentEditFile) {
                 projectFiles[currentEditFile] = document.getElementById('editorContent').value;
+                // Visual feedback
+                const btn = document.querySelector('.btn-save');
+                btn.textContent = 'Saved!';
+                btn.style.background = '#0c0';
+                setTimeout(() => {
+                    btn.textContent = 'Save';
+                    btn.style.background = '#0a0';
+                }, 1000);
             }
         }
 
         function closeEditor() {
-            saveEditor();
+            if (currentEditFile) {
+                projectFiles[currentEditFile] = document.getElementById('editorContent').value;
+            }
             document.getElementById('editorContainer').style.display = 'none';
             currentEditFile = null;
         }
