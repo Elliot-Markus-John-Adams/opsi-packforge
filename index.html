@@ -250,7 +250,7 @@
                         <label>Version</label>
                         <span class="info">i<span class="tip">Software version (e.g. 1.0.0)</span></span>
                     </div>
-                    <input type="text" id="pkgVersion" value="1.0.0">
+                    <input type="text" id="pkgVersion" placeholder="1.0.0">
                 </div>
                 <div>
                     <div class="label-row">
@@ -429,7 +429,7 @@
             return {
                 id: document.getElementById('pkgId').value.trim(),
                 name: document.getElementById('pkgName').value.trim(),
-                version: document.getElementById('pkgVersion').value.trim() || '1.0.0',
+                version: document.getElementById('pkgVersion').value.trim(),
                 priority: document.getElementById('pkgPriority').value || '0',
                 desc: document.getElementById('pkgDesc').value.trim(),
                 setupFile: selectedFile ? selectedFile.name : 'setup.exe',
