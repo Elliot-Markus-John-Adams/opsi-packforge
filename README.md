@@ -1,67 +1,94 @@
 # OPSI PackForge
 
-Tool for OPSI package management in paedML Linux.
+Web-based OPSI package builder for paedML Linux.
 
-## Installation
-
-```powershell
-[System.Net.WebRequest]::DefaultWebProxy.Credentials = [System.Net.CredentialCache]::DefaultCredentials
-iex ((New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/Elliot-Markus-John-Adams/opsi-packforge/main/install.ps1'))
-```
+**https://elliot-markus-john-adams.github.io/opsi-packforge**
 
 ## Features
 
-- Create, update and delete packages
-- Deploy directly to OPSI server
-- Manage workbench projects
-- View logs
+- Create complete OPSI package structure in browser
+- Drag & drop installer files
+- Auto-detects installer type (MSI, InnoSetup, NSIS, InstallShield, PowerShell)
+- Editable install parameters
+- Full control file support:
+  - Package dependencies (`[ProductDependency]`)
+  - Configurable properties (`[ProductProperty]`)
+  - All script types (setup, uninstall, update, always, once, custom, userlogin)
+  - preinst/postinst scripts
+- Edit all files before download
+- Download as ready-to-use .zip
 
-## Requirements
+## Usage
 
-- Windows 10/11
-- PowerShell 5.1+
-- SSH access to OPSI server (10.1.0.2)
+1. Open the web app
+2. Fill in package info (ID, name, version)
+3. Select installer type
+4. Drag & drop your installer files
+5. Add dependencies/properties if needed
+6. Click **Build**
+7. Edit scripts as needed (click to edit)
+8. Click **Download .zip**
 
-## Changelog v2.0.1
-
-### Fixes
-- `opsi-package-manager -r` now works with `TERM=dumb`
-- `opsi-makepackage --no-interactive` overwrites automatically
-- Workbench is completely cleaned up when deleting
-
-### New Features
-- Shows installed packages AND workbench projects when deleting
-- Can handle package IDs or workbench folder names
-- Multiple log files in advanced options
-
-## Known Issues
-
-If a package is not deleted properly:
-```bash
-ssh root@10.1.0.2
-opsi-package-manager -r packagename --purge
-rm -rf /var/lib/opsi/workbench/packagename*
-```
-
-## SSH without Password
+## Deploying to OPSI Server
 
 ```bash
-ssh-keygen -t rsa -b 4096
-ssh-copy-id root@10.1.0.2
+# Extract and copy to workbench
+unzip mypackage.zip -d /var/lib/opsi/workbench/
+
+# Build and install
+cd /var/lib/opsi/workbench/mypackage
+opsi-makepackage
+opsi-package-manager -i mypackage_1.0-1.opsi
 ```
 
-## Silent Parameters
+## Silent Install Parameters
 
-| Installer | Parameter |
-|-----------|-----------|
-| MSI | `/qn` |
+| Installer | Parameters |
+|-----------|------------|
+| MSI | `msiexec /i /qn /norestart` |
+| InnoSetup | `/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /ALLUSERS` |
 | NSIS | `/S` |
-| InnoSetup | `/VERYSILENT /NORESTART` |
+| InstallShield | `/s /sms` |
 
-## Support
+## Control File Structure
 
-GitHub Issues: https://github.com/Elliot-Markus-John-Adams/opsi-packforge/issues
+```
+[Package]
+version: 1
+depends:
 
----
+[Product]
+type: localboot
+id: mypackage
+name: My Package
+description: Description here
+advice: Usage notes
+version: 1.0
+priority: 0
+licenseRequired: False
+productClasses:
+setupScript: setup.opsiscript
+uninstallScript: uninstall.opsiscript
+updateScript:
+alwaysScript:
+onceScript:
+customScript:
+userLoginScript:
+
+[ProductDependency]
+action: setup
+requiredProduct: javavm
+requiredStatus: installed
+requirementType: before
+
+[ProductProperty]
+type: unicode
+name: install_mode
+description: Installation mode
+values: ["standard", "custom"]
+default: ["standard"]
+```
+
+## License
 
 MIT License
