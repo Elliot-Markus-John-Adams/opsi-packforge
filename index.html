@@ -267,12 +267,12 @@
         <section>
             <h2>Installer Type</h2>
             <div class="types">
-                <button class="type-btn" data-type="msi" data-params="/qn,/norestart">MSI</button>
+                <button class="type-btn" data-type="msi" data-params="msiexec,/i,/qn,/norestart">MSI</button>
                 <button class="type-btn" data-type="inno" data-params="/VERYSILENT,/SUPPRESSMSGBOXES,/NORESTART">InnoSetup</button>
                 <button class="type-btn" data-type="nsis" data-params="/S">NSIS</button>
                 <button class="type-btn" data-type="installshield" data-params="/s,/sms">InstallShield</button>
                 <button class="type-btn" data-type="exe" data-params="">EXE (custom)</button>
-                <button class="type-btn" data-type="ps1" data-params="">PowerShell</button>
+                <button class="type-btn" data-type="ps1" data-params="powershell,-ExecutionPolicy,Bypass,-File">PowerShell</button>
             </div>
 
             <div class="params-container" id="paramsContainer">
@@ -332,14 +332,7 @@
 
         function renderTags() {
             const container = document.getElementById('tagsContainer');
-
-            if (selectedType === 'msi') {
-                container.innerHTML = '<span class="tag" style="background:#1a2a1a;border-color:#0a0;color:#0a0;">msiexec /i</span>';
-            } else if (selectedType === 'ps1') {
-                container.innerHTML = '<span class="tag" style="background:#1a2a1a;border-color:#0a0;color:#0a0;">powershell -ExecutionPolicy Bypass -File</span>';
-            } else {
-                container.innerHTML = '';
-            }
+            container.innerHTML = '';
 
             currentParams.forEach((param, i) => {
                 const tag = document.createElement('span');
@@ -466,22 +459,18 @@ onceScript:`;
 
         function makeSetup(d) {
             let install = '';
-            if (d.type === 'msi') {
-                install = `Winbatch_install
+            const params = d.params ? d.params + ' ' : '';
 
-[Winbatch_install]
-msiexec /i "$SetupFile$" ${d.params}`;
-            } else if (d.type === 'ps1') {
+            if (d.type === 'ps1') {
                 install = `ShellCall_install
 
 [ShellCall_install]
-powershell.exe -ExecutionPolicy Bypass -File "$SetupFile$"`;
+${params}"$SetupFile$"`;
             } else {
-                const p = d.params ? ' ' + d.params : '';
                 install = `Winbatch_install
 
 [Winbatch_install]
-"$SetupFile$"${p}`;
+${params}"$SetupFile$"`;
             }
 
             return `; ${d.name} - setup script
