@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OPSI PackForge</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            color: #e4e4e4;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .logo {
+            font-size: 3rem;
+            font-weight: 700;
+            background: linear-gradient(90deg, #00d4ff, #00ff88);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 10px;
+        }
+
+        .tagline {
+            color: #888;
+            font-size: 1.1rem;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 20px;
+            backdrop-filter: blur(10px);
+        }
+
+        .card-title {
+            font-size: 1.3rem;
+            margin-bottom: 20px;
+            color: #00d4ff;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .card-title::before {
+            content: '';
+            width: 4px;
+            height: 24px;
+            background: linear-gradient(180deg, #00d4ff, #00ff88);
+            border-radius: 2px;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-group.full-width {
+            grid-column: 1 / -1;
+        }
+
+        label {
+            font-size: 0.85rem;
+            color: #aaa;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        input, select, textarea {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 8px;
+            padding: 12px 16px;
+            color: #fff;
+            font-size: 1rem;
+            transition: all 0.2s;
+        }
+
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #00d4ff;
+            box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.1);
+        }
+
+        input::placeholder {
+            color: #555;
+        }
+
+        select {
+            cursor: pointer;
+        }
+
+        select option {
+            background: #1a1a2e;
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .installer-types {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 10px;
+        }
+
+        .installer-type {
+            background: rgba(0, 0, 0, 0.3);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .installer-type:hover {
+            border-color: rgba(0, 212, 255, 0.5);
+        }
+
+        .installer-type.selected {
+            border-color: #00d4ff;
+            background: rgba(0, 212, 255, 0.1);
+        }
+
+        .installer-type .icon {
+            font-size: 1.5rem;
+            margin-bottom: 5px;
+        }
+
+        .installer-type .name {
+            font-weight: 600;
+            margin-bottom: 3px;
+        }
+
+        .installer-type .params {
+            font-size: 0.75rem;
+            color: #666;
+            font-family: monospace;
+        }
+
+        .silent-param-display {
+            margin-top: 15px;
+            padding: 12px 16px;
+            background: rgba(0, 255, 136, 0.1);
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 0.9rem;
+            color: #00ff88;
+        }
+
+        .actions {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-top: 30px;
+        }
+
+        .btn {
+            padding: 14px 32px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(90deg, #00d4ff, #00ff88);
+            color: #000;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(0, 212, 255, 0.3);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .preview {
+            background: #0d0d0d;
+            border-radius: 8px;
+            padding: 20px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.85rem;
+            line-height: 1.6;
+            overflow-x: auto;
+            white-space: pre;
+            color: #00ff88;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        footer {
+            text-align: center;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            color: #555;
+        }
+
+        footer a {
+            color: #00d4ff;
+            text-decoration: none;
+        }
+
+        footer a:hover {
+            text-decoration: underline;
+        }
+
+        @media (max-width: 600px) {
+            .logo {
+                font-size: 2rem;
+            }
+            .actions {
+                flex-direction: column;
+            }
+            .btn {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">OPSI PackForge</div>
+            <p class="tagline">Package Management Made Easy</p>
+        </header>
+
+        <div class="card">
+            <h2 class="card-title">Basic Information</h2>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Package ID *</label>
+                    <input type="text" id="pkgId" placeholder="e.g. firefox" pattern="[a-zA-Z0-9_-]+" required>
+                </div>
+                <div class="form-group">
+                    <label>Package Name *</label>
+                    <input type="text" id="pkgName" placeholder="e.g. Mozilla Firefox">
+                </div>
+                <div class="form-group">
+                    <label>Version</label>
+                    <input type="text" id="pkgVersion" placeholder="1.0.0" value="1.0.0">
+                </div>
+                <div class="form-group">
+                    <label>Priority (0-100)</label>
+                    <input type="number" id="pkgPriority" min="0" max="100" value="0">
+                </div>
+                <div class="form-group full-width">
+                    <label>Description</label>
+                    <textarea id="pkgDesc" placeholder="Brief description of the package..."></textarea>
+                </div>
+                <div class="form-group full-width">
+                    <label>Notes / Advice</label>
+                    <input type="text" id="pkgAdvice" placeholder="Optional notes for administrators">
+                </div>
+                <div class="form-group">
+                    <label>Dependencies</label>
+                    <input type="text" id="pkgDepends" placeholder="Comma-separated package IDs">
+                </div>
+                <div class="form-group">
+                    <label>Product Classes</label>
+                    <input type="text" id="pkgClasses" placeholder="Comma-separated classes">
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2 class="card-title">Installer Type</h2>
+            <div class="installer-types">
+                <div class="installer-type" data-type="msi" data-params="/qn /norestart">
+                    <div class="icon">📦</div>
+                    <div class="name">MSI</div>
+                    <div class="params">/qn /norestart</div>
+                </div>
+                <div class="installer-type" data-type="inno" data-params="/VERYSILENT /SUPPRESSMSGBOXES /NORESTART">
+                    <div class="icon">🔧</div>
+                    <div class="name">InnoSetup</div>
+                    <div class="params">/VERYSILENT</div>
+                </div>
+                <div class="installer-type" data-type="nsis" data-params="/S">
+                    <div class="icon">📁</div>
+                    <div class="name">NSIS</div>
+                    <div class="params">/S</div>
+                </div>
+                <div class="installer-type" data-type="installshield" data-params="/s /sms">
+                    <div class="icon">🛡️</div>
+                    <div class="name">InstallShield</div>
+                    <div class="params">/s /sms</div>
+                </div>
+                <div class="installer-type" data-type="exe" data-params="">
+                    <div class="icon">⚙️</div>
+                    <div class="name">EXE (Custom)</div>
+                    <div class="params">custom</div>
+                </div>
+                <div class="installer-type" data-type="powershell" data-params="">
+                    <div class="icon">💻</div>
+                    <div class="name">PowerShell</div>
+                    <div class="params">.ps1</div>
+                </div>
+            </div>
+            <div class="silent-param-display" id="silentParamDisplay">
+                Select an installer type above
+            </div>
+            <div class="form-group full-width" style="margin-top: 15px;">
+                <label>Setup Filename</label>
+                <input type="text" id="setupFile" placeholder="e.g. setup.exe or install.msi">
+            </div>
+            <div class="form-group full-width" id="customParamsGroup" style="margin-top: 10px;">
+                <label>Custom Silent Parameters</label>
+                <input type="text" id="customParams" placeholder="e.g. /silent /norestart">
+            </div>
+        </div>
+
+        <div class="card hidden" id="previewCard">
+            <h2 class="card-title">Preview: control</h2>
+            <div class="preview" id="controlPreview"></div>
+        </div>
+
+        <div class="actions">
+            <button class="btn btn-secondary" onclick="showPreview()">Preview Files</button>
+            <button class="btn btn-primary" onclick="downloadPackage()">
+                <span>Download Package</span>
+                <span>📥</span>
+            </button>
+        </div>
+
+        <footer>
+            <p>OPSI PackForge &mdash; <a href="https://github.com/Elliot-Markus-John-Adams/opsi-packforge" target="_blank">GitHub</a></p>
+        </footer>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script>
+        let selectedType = null;
+        let silentParams = '';
+
+        // Installer type selection
+        document.querySelectorAll('.installer-type').forEach(el => {
+            el.addEventListener('click', () => {
+                document.querySelectorAll('.installer-type').forEach(e => e.classList.remove('selected'));
+                el.classList.add('selected');
+                selectedType = el.dataset.type;
+                silentParams = el.dataset.params;
+
+                const display = document.getElementById('silentParamDisplay');
+                if (selectedType === 'msi') {
+                    display.textContent = `msiexec /i "$SetupFile$" ${silentParams}`;
+                } else if (selectedType === 'powershell') {
+                    display.textContent = `powershell.exe -ExecutionPolicy Bypass -File "$SetupFile$"`;
+                } else if (silentParams) {
+                    display.textContent = `"$SetupFile$" ${silentParams}`;
+                } else {
+                    display.textContent = `"$SetupFile$" [custom parameters]`;
+                }
+
+                document.getElementById('customParamsGroup').style.display =
+                    (selectedType === 'exe') ? 'flex' : 'none';
+            });
+        });
+
+        function getFormData() {
+            return {
+                id: document.getElementById('pkgId').value.trim(),
+                name: document.getElementById('pkgName').value.trim(),
+                version: document.getElementById('pkgVersion').value.trim() || '1.0.0',
+                priority: document.getElementById('pkgPriority').value || '0',
+                description: document.getElementById('pkgDesc').value.trim(),
+                advice: document.getElementById('pkgAdvice').value.trim(),
+                depends: document.getElementById('pkgDepends').value.trim(),
+                classes: document.getElementById('pkgClasses').value.trim(),
+                setupFile: document.getElementById('setupFile').value.trim(),
+                installerType: selectedType,
+                silentParams: selectedType === 'exe' ?
+                    document.getElementById('customParams').value.trim() : silentParams
+            };
+        }
+
+        function generateControl(data) {
+            return `[Package]
+version: 1
+depends: ${data.depends}
+incremental: False
+
+[Product]
+type: localboot
+id: ${data.id}
+name: ${data.name}
+description: ${data.description || data.name + ' Installation'}
+advice: ${data.advice}
+version: ${data.version}
+priority: ${data.priority}
+licenseRequired: False
+productClasses: ${data.classes}
+setupScript: setup.opsiscript
+uninstallScript: uninstall.opsiscript
+updateScript:
+alwaysScript:
+onceScript: `;
+        }
+
+        function generateSetupScript(data) {
+            const setupFileName = data.setupFile || 'YOUR_SETUP_FILE_HERE';
+            let winbatchSection = '';
+
+            if (data.installerType === 'msi') {
+                winbatchSection = `Winbatch_install_msi
+Sub_check_exitcode
+
+[Winbatch_install_msi]
+msiexec /i "$SetupFile$" /qn /norestart`;
+            } else if (data.installerType === 'powershell') {
+                winbatchSection = `ShellCall_install
+Sub_check_exitcode
+
+[ShellCall_install]
+powershell.exe -ExecutionPolicy Bypass -File "$SetupFile$"`;
+            } else {
+                const params = data.silentParams ? ` ${data.silentParams}` : '';
+                winbatchSection = `Winbatch_install
+Sub_check_exitcode
+
+[Winbatch_install]
+"$SetupFile$"${params}`;
+            }
+
+            return `; Setup script for ${data.name}
+; Generated by OPSI PackForge
+; Installer type: ${data.installerType || 'unknown'}
+
+[Actions]
+requiredWinstVersion >= "4.11.6"
+
+DefVar $SetupFile$
+DefVar $ProductId$
+DefVar $ExitCode$
+
+Set $ProductId$ = "${data.id}"
+Set $SetupFile$ = "%ScriptPath%\\files\\${setupFileName}"
+
+Message "Installing " + $ProductId$ + " ..."
+
+comment "Start setup program"
+ChangeDirectory "%ScriptPath%\\files"
+${winbatchSection}
+
+[Sub_check_exitcode]
+set $ExitCode$ = getLastExitCode
+if ($ExitCode$ = "0")
+    comment "Setup successful"
+else
+    logError "Setup failed with exit code: " + $ExitCode$
+    isFatalError
+endif`;
+        }
+
+        function generateUninstallScript(data) {
+            return `; Uninstall script for ${data.name}
+; Generated by OPSI PackForge
+
+[Actions]
+Message "Uninstalling ${data.name}"
+
+; TODO: Add uninstall commands here
+; Example for MSI: msiexec /x {PRODUCT-GUID} /qn
+`;
+        }
+
+        function showPreview() {
+            const data = getFormData();
+            if (!data.id || !data.name) {
+                alert('Please fill in Package ID and Name');
+                return;
+            }
+
+            const control = generateControl(data);
+            document.getElementById('controlPreview').textContent = control;
+            document.getElementById('previewCard').classList.remove('hidden');
+            document.getElementById('previewCard').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        async function downloadPackage() {
+            const data = getFormData();
+            if (!data.id || !data.name) {
+                alert('Please fill in Package ID and Name');
+                return;
+            }
+
+            const zip = new JSZip();
+            const pkgFolder = `${data.id}_${data.version}`;
+
+            // Create folder structure
+            zip.folder(pkgFolder + '/OPSI');
+            zip.folder(pkgFolder + '/CLIENT_DATA/files');
+
+            // Add files
+            zip.file(pkgFolder + '/OPSI/control', generateControl(data));
+            zip.file(pkgFolder + '/CLIENT_DATA/setup.opsiscript', generateSetupScript(data));
+            zip.file(pkgFolder + '/CLIENT_DATA/uninstall.opsiscript', generateUninstallScript(data));
+            zip.file(pkgFolder + '/CLIENT_DATA/files/.gitkeep', '');
+
+            // Generate and download
+            const content = await zip.generateAsync({ type: 'blob' });
+            const url = URL.createObjectURL(content);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${pkgFolder}.zip`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>
