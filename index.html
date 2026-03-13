@@ -294,6 +294,43 @@
             overflow-y: auto;
         }
 
+        .add-item-btn {
+            background: #222;
+            border: 1px dashed #444;
+            color: #666;
+            padding: 8px 16px;
+            cursor: pointer;
+            font-size: 13px;
+            width: 100%;
+            margin-top: 10px;
+        }
+        .add-item-btn:hover { border-color: #0af; color: #0af; }
+
+        .dep-item, .prop-item {
+            background: #222;
+            border: 1px solid #333;
+            padding: 12px;
+            margin-bottom: 8px;
+            position: relative;
+        }
+        .dep-item .remove-item, .prop-item .remove-item {
+            position: absolute;
+            top: 8px;
+            right: 10px;
+            color: #666;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .dep-item .remove-item:hover, .prop-item .remove-item:hover { color: #f55; }
+        .item-row { display: flex; gap: 10px; margin-bottom: 8px; }
+        .item-row > div { flex: 1; }
+        .item-row label { font-size: 11px; color: #666; display: block; margin-bottom: 3px; }
+        .item-row input, .item-row select {
+            width: 100%;
+            padding: 6px 8px;
+            font-size: 12px;
+        }
+
         footer { text-align: center; color: #444; margin-top: 30px; font-size: 13px; }
         footer a { color: #0af; text-decoration: none; }
     </style>
@@ -324,17 +361,35 @@
             <div class="row">
                 <div>
                     <div class="label-row">
-                        <label>Version</label>
+                        <label>Software Version</label>
                         <span class="info">i<span class="tip">Software version (e.g. 1.0.0)</span></span>
                     </div>
                     <input type="text" id="pkgVersion" placeholder="1.0.0">
                 </div>
                 <div>
                     <div class="label-row">
+                        <label>Package Version</label>
+                        <span class="info">i<span class="tip">OPSI package revision (increment when scripts change)</span></span>
+                    </div>
+                    <input type="text" id="pkgPackageVersion" value="1" placeholder="1">
+                </div>
+            </div>
+            <div class="row">
+                <div>
+                    <div class="label-row">
                         <label>Priority</label>
                         <span class="info">i<span class="tip">-100 to 100. Higher = installs first</span></span>
                     </div>
                     <input type="number" id="pkgPriority" value="0" min="-100" max="100">
+                </div>
+                <div>
+                    <div class="label-row">
+                        <label>License Required</label>
+                    </div>
+                    <select id="pkgLicense">
+                        <option value="False">No</option>
+                        <option value="True">Yes</option>
+                    </select>
                 </div>
             </div>
             <div>
@@ -373,6 +428,18 @@
             <div class="file-list" id="fileList"></div>
         </section>
 
+        <section>
+            <h2>Dependencies <span class="info">i<span class="tip">Other OPSI products that must be installed</span></span></h2>
+            <div id="dependenciesList"></div>
+            <button class="add-item-btn" onclick="addDependency()">+ Add Dependency</button>
+        </section>
+
+        <section>
+            <h2>Properties <span class="info">i<span class="tip">Configurable parameters for this package</span></span></h2>
+            <div id="propertiesList"></div>
+            <button class="add-item-btn" onclick="addProperty()">+ Add Property</button>
+        </section>
+
         <section id="projectSection" style="display:none;">
             <h2>Project Files</h2>
             <div class="file-tree" id="fileTree"></div>
@@ -403,6 +470,125 @@
         let selectedType = null;
         let currentParams = [];
         let selectedFiles = [];
+        let dependencies = [];
+        let properties = [];
+
+        // Dependencies
+        function addDependency() {
+            dependencies.push({
+                action: 'setup',
+                requiredProduct: '',
+                requiredStatus: 'installed',
+                requirementType: 'before'
+            });
+            renderDependencies();
+        }
+
+        function removeDependency(index) {
+            dependencies.splice(index, 1);
+            renderDependencies();
+        }
+
+        function updateDependency(index, field, value) {
+            dependencies[index][field] = value;
+        }
+
+        function renderDependencies() {
+            const list = document.getElementById('dependenciesList');
+            list.innerHTML = dependencies.map((dep, i) => `
+                <div class="dep-item">
+                    <span class="remove-item" onclick="removeDependency(${i})">×</span>
+                    <div class="item-row">
+                        <div>
+                            <label>Required Product ID</label>
+                            <input type="text" value="${dep.requiredProduct}" placeholder="e.g. javavm" onchange="updateDependency(${i}, 'requiredProduct', this.value)">
+                        </div>
+                        <div>
+                            <label>Action</label>
+                            <select onchange="updateDependency(${i}, 'action', this.value)">
+                                <option value="setup" ${dep.action === 'setup' ? 'selected' : ''}>setup</option>
+                                <option value="uninstall" ${dep.action === 'uninstall' ? 'selected' : ''}>uninstall</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="item-row">
+                        <div>
+                            <label>Required Status</label>
+                            <select onchange="updateDependency(${i}, 'requiredStatus', this.value)">
+                                <option value="installed" ${dep.requiredStatus === 'installed' ? 'selected' : ''}>installed</option>
+                                <option value="not_installed" ${dep.requiredStatus === 'not_installed' ? 'selected' : ''}>not_installed</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label>Requirement Type</label>
+                            <select onchange="updateDependency(${i}, 'requirementType', this.value)">
+                                <option value="before" ${dep.requirementType === 'before' ? 'selected' : ''}>before</option>
+                                <option value="after" ${dep.requirementType === 'after' ? 'selected' : ''}>after</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Properties
+        function addProperty() {
+            properties.push({
+                type: 'unicode',
+                name: '',
+                description: '',
+                values: '',
+                default: ''
+            });
+            renderProperties();
+        }
+
+        function removeProperty(index) {
+            properties.splice(index, 1);
+            renderProperties();
+        }
+
+        function updateProperty(index, field, value) {
+            properties[index][field] = value;
+        }
+
+        function renderProperties() {
+            const list = document.getElementById('propertiesList');
+            list.innerHTML = properties.map((prop, i) => `
+                <div class="prop-item">
+                    <span class="remove-item" onclick="removeProperty(${i})">×</span>
+                    <div class="item-row">
+                        <div>
+                            <label>Name</label>
+                            <input type="text" value="${prop.name}" placeholder="property_name" onchange="updateProperty(${i}, 'name', this.value)">
+                        </div>
+                        <div>
+                            <label>Type</label>
+                            <select onchange="updateProperty(${i}, 'type', this.value)">
+                                <option value="unicode" ${prop.type === 'unicode' ? 'selected' : ''}>unicode (text)</option>
+                                <option value="bool" ${prop.type === 'bool' ? 'selected' : ''}>bool</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="item-row">
+                        <div>
+                            <label>Description</label>
+                            <input type="text" value="${prop.description}" placeholder="What this property does" onchange="updateProperty(${i}, 'description', this.value)">
+                        </div>
+                    </div>
+                    <div class="item-row">
+                        <div>
+                            <label>Values (comma-separated)</label>
+                            <input type="text" value="${prop.values}" placeholder="e.g. on, off" onchange="updateProperty(${i}, 'values', this.value)">
+                        </div>
+                        <div>
+                            <label>Default</label>
+                            <input type="text" value="${prop.default}" placeholder="Default value" onchange="updateProperty(${i}, 'default', this.value)">
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
 
         // Installer type buttons
         document.querySelectorAll('.type-btn').forEach(btn => {
@@ -659,17 +845,21 @@
                 id: document.getElementById('pkgId').value.trim(),
                 name: document.getElementById('pkgName').value.trim(),
                 version: document.getElementById('pkgVersion').value.trim(),
+                packageVersion: document.getElementById('pkgPackageVersion').value.trim() || '1',
                 priority: document.getElementById('pkgPriority').value || '0',
+                license: document.getElementById('pkgLicense').value,
                 desc: document.getElementById('pkgDesc').value.trim(),
                 setupFile: selectedFiles.length ? selectedFiles[0].name : 'setup.exe',
                 type: selectedType,
-                params: currentParams.join(' ')
+                params: currentParams.join(' '),
+                dependencies: dependencies.filter(d => d.requiredProduct),
+                properties: properties.filter(p => p.name)
             };
         }
 
         function makeControl(d) {
-            return `[Package]
-version: 1
+            let control = `[Package]
+version: ${d.packageVersion}
 
 [Product]
 type: localboot
@@ -677,9 +867,9 @@ id: ${d.id}
 name: ${d.name}
 description: ${d.desc || d.name}
 advice:
-version: ${d.version}
+version: ${d.version || '1.0'}
 priority: ${d.priority}
-licenseRequired: False
+licenseRequired: ${d.license}
 productClasses:
 setupScript: setup.opsiscript
 uninstallScript: uninstall.opsiscript
@@ -688,6 +878,33 @@ alwaysScript:
 onceScript:
 customScript:
 userLoginScript:`;
+
+            // Add dependencies
+            d.dependencies.forEach(dep => {
+                control += `
+
+[ProductDependency]
+action: ${dep.action}
+requiredProduct: ${dep.requiredProduct}
+requiredStatus: ${dep.requiredStatus}
+requirementType: ${dep.requirementType}`;
+            });
+
+            // Add properties
+            d.properties.forEach(prop => {
+                const values = prop.values ? prop.values.split(',').map(v => `"${v.trim()}"`).join(', ') : '';
+                const defaultVal = prop.type === 'bool' ? prop.default : `"${prop.default}"`;
+                control += `
+
+[ProductProperty]
+type: ${prop.type}
+name: ${prop.name}
+description: ${prop.description}${prop.values ? `
+values: [${values}]` : ''}
+default: [${defaultVal}]`;
+            });
+
+            return control;
         }
 
         function makeSetup(d) {
