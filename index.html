@@ -214,8 +214,15 @@
             font-weight: bold;
             padding: 0 6px;
         }
-        .tree-file.binary { cursor: default; }
-        .tree-file.binary:hover { background: transparent; }
+        .tree-file .remove-btn {
+            color: #666;
+            cursor: pointer;
+            padding: 0 6px;
+            font-size: 14px;
+            opacity: 0;
+        }
+        .tree-file:hover .remove-btn { opacity: 1; }
+        .tree-file .remove-btn:hover { color: #f55; }
 
         .editor-container {
             margin-top: 15px;
@@ -821,9 +828,12 @@
         let currentEditFile = null;
 
         const optionalFiles = {
+            'OPSI/control': 'REGENERATE',
             'OPSI/preinst': '#!/bin/bash\n# Runs on depot BEFORE package is installed\n# Available: $PRODUCT_ID, $PRODUCT_VERSION, $CLIENT_DATA_DIR\n\nexit 0',
             'OPSI/postinst': '#!/bin/bash\n# Runs on depot AFTER package is installed\n# Available: $PRODUCT_ID, $PRODUCT_VERSION, $CLIENT_DATA_DIR\n\nexit 0',
             'OPSI/changelog.txt': '',
+            'CLIENT_DATA/setup.opsiscript': 'REGENERATE',
+            'CLIENT_DATA/uninstall.opsiscript': 'REGENERATE',
             'CLIENT_DATA/update.opsiscript': `[Actions]
 requiredOpsiscriptVersion >= "4.12.5.0"
 
@@ -949,11 +959,10 @@ Message "Running user login script for " + $ProductId$ + "..."
 
             // OPSI folder
             html += `<div class="tree-folder" style="margin-left:15px;">OPSI/</div>`;
-            html += renderFileItem('OPSI/control');
 
-            // Optional OPSI files
-            const opsiOptional = ['OPSI/preinst', 'OPSI/postinst', 'OPSI/changelog.txt'];
-            opsiOptional.forEach(path => {
+            // All OPSI files (removable and re-addable)
+            const opsiFiles = ['OPSI/control', 'OPSI/preinst', 'OPSI/postinst', 'OPSI/changelog.txt'];
+            opsiFiles.forEach(path => {
                 if (projectFiles[path]) {
                     html += renderFileItem(path);
                 } else {
@@ -964,19 +973,17 @@ Message "Running user login script for " + $ProductId$ + "..."
             // CLIENT_DATA folder
             html += `<div class="tree-folder" style="margin-left:15px;">CLIENT_DATA/</div>`;
 
-            // Core scripts first
-            html += renderFileItem('CLIENT_DATA/setup.opsiscript');
-            html += renderFileItem('CLIENT_DATA/uninstall.opsiscript');
-
-            // Optional CLIENT_DATA scripts
-            const clientOptional = [
+            // All CLIENT_DATA scripts (removable and re-addable)
+            const clientScripts = [
+                'CLIENT_DATA/setup.opsiscript',
+                'CLIENT_DATA/uninstall.opsiscript',
                 'CLIENT_DATA/update.opsiscript',
                 'CLIENT_DATA/always.opsiscript',
                 'CLIENT_DATA/once.opsiscript',
                 'CLIENT_DATA/custom.opsiscript',
                 'CLIENT_DATA/userlogin.opsiscript'
             ];
-            clientOptional.forEach(path => {
+            clientScripts.forEach(path => {
                 if (projectFiles[path]) {
                     html += renderFileItem(path);
                 } else {
@@ -1004,13 +1011,15 @@ Message "Running user login script for " + $ProductId$ + "..."
                     <span>${icon}</span>
                     <span class="name">${name}</span>
                     <span style="color:#666;font-size:11px;">${formatSize(projectFiles[path].file.size)}</span>
+                    <span class="remove-btn" onclick="removeFile('${path}')" title="Remove">🗑</span>
                 </div>`;
             }
 
-            return `<div class="tree-file" style="margin-left:30px;" onclick="editFile('${path}')">
+            return `<div class="tree-file" style="margin-left:30px;">
                 <span>${icon}</span>
-                <span class="name">${name}</span>
-                <span class="edit">✎ edit</span>
+                <span class="name" onclick="editFile('${path}')">${name}</span>
+                <span class="edit" onclick="editFile('${path}')">✎ edit</span>
+                <span class="remove-btn" onclick="removeFile('${path}')" title="Remove">🗑</span>
             </div>`;
         }
 
@@ -1023,12 +1032,42 @@ Message "Running user login script for " + $ProductId$ + "..."
             </div>`;
         }
 
+        function removeFile(path) {
+            event.stopPropagation();
+            delete projectFiles[path];
+
+            // Close editor if this file was being edited
+            if (currentEditFile === path) {
+                document.getElementById('editorContainer').style.display = 'none';
+                currentEditFile = null;
+            }
+
+            // Regenerate control to update script references
+            const d = getData();
+            if (projectFiles['OPSI/control']) {
+                projectFiles['OPSI/control'] = makeControl(d);
+            }
+
+            renderFileTree(d.id);
+        }
+
         function addOptionalFile(path) {
             const d = getData();
             let content = optionalFiles[path] || '';
 
-            // Replace YOURPRODUCT with actual product ID
-            content = content.replace(/YOURPRODUCT/g, d.id || 'myproduct');
+            // Handle files that need regeneration
+            if (content === 'REGENERATE') {
+                if (path === 'OPSI/control') {
+                    content = makeControl(d);
+                } else if (path === 'CLIENT_DATA/setup.opsiscript') {
+                    content = makeSetup(d);
+                } else if (path === 'CLIENT_DATA/uninstall.opsiscript') {
+                    content = makeUninstall(d);
+                }
+            } else {
+                // Replace YOURPRODUCT with actual product ID
+                content = content.replace(/YOURPRODUCT/g, d.id || 'myproduct');
+            }
 
             if (path === 'OPSI/changelog.txt') {
                 content = `${d.id} (${d.version || '1.0'}-1) stable; urgency=low
@@ -1041,7 +1080,9 @@ Message "Running user login script for " + $ProductId$ + "..."
             projectFiles[path] = content;
 
             // Regenerate control to update script references
-            projectFiles['OPSI/control'] = makeControl(d);
+            if (projectFiles['OPSI/control'] && path !== 'OPSI/control') {
+                projectFiles['OPSI/control'] = makeControl(d);
+            }
 
             renderFileTree(d.id);
             editFile(path);
