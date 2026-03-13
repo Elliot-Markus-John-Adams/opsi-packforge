@@ -169,27 +169,28 @@
         .dropzone-text span { color: #0af; }
         .dropzone-hint { color: #555; font-size: 12px; margin-top: 5px; }
 
-        .file-info {
-            display: none;
+        .file-list { margin-top: 10px; }
+        .file-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
             background: #1a2a1a;
-            border: 1px solid #0a0;
-            padding: 12px;
+            border: 1px solid #2a4a2a;
+            padding: 8px 12px;
             border-radius: 4px;
-            margin-top: 15px;
+            margin-top: 6px;
+            font-size: 13px;
         }
-        .file-info.visible { display: flex; align-items: center; gap: 12px; }
-        .file-icon { font-size: 24px; }
-        .file-details { flex: 1; }
-        .file-name { color: #fff; font-weight: 500; }
-        .file-size { color: #666; font-size: 12px; }
-        .file-remove {
-            background: none;
-            border: none;
+        .file-item .icon { opacity: 0.6; }
+        .file-item .name { flex: 1; color: #ccc; }
+        .file-item .size { color: #666; font-size: 11px; }
+        .file-item .remove {
             color: #666;
-            font-size: 18px;
             cursor: pointer;
+            font-size: 16px;
+            padding: 0 4px;
         }
-        .file-remove:hover { color: #f55; }
+        .file-item .remove:hover { color: #f55; }
 
         .actions { display: flex; gap: 10px; margin-top: 20px; }
         button {
@@ -288,19 +289,12 @@
 
             <div class="dropzone" id="dropzone">
                 <div class="dropzone-icon">📁</div>
-                <div class="dropzone-text">Drag & drop installer file or <span>browse</span></div>
-                <div class="dropzone-hint">.exe, .msi, .ps1, .bat supported</div>
+                <div class="dropzone-text">Drag & drop files or <span>browse</span></div>
+                <div class="dropzone-hint">Drop any files - they'll be included in CLIENT_DATA</div>
             </div>
-            <input type="file" id="fileInput" accept=".exe,.msi,.ps1,.bat,.cmd" style="display:none">
+            <input type="file" id="fileInput" multiple style="display:none">
 
-            <div class="file-info" id="fileInfo">
-                <div class="file-icon">📦</div>
-                <div class="file-details">
-                    <div class="file-name" id="fileName">setup.exe</div>
-                    <div class="file-size" id="fileSize">2.4 MB</div>
-                </div>
-                <button class="file-remove" onclick="removeFile()">×</button>
-            </div>
+            <div class="file-list" id="fileList"></div>
         </section>
 
         <div class="actions">
@@ -319,7 +313,7 @@
     <script>
         let selectedType = null;
         let currentParams = [];
-        let selectedFile = null;
+        let selectedFiles = [];
 
         // Installer type buttons
         document.querySelectorAll('.type-btn').forEach(btn => {
@@ -383,40 +377,51 @@
         dropzone.ondrop = (e) => {
             e.preventDefault();
             dropzone.classList.remove('dragover');
-            if (e.dataTransfer.files.length) {
-                handleFile(e.dataTransfer.files[0]);
-            }
+            handleFiles(e.dataTransfer.files);
         };
 
         fileInput.onchange = () => {
-            if (fileInput.files.length) {
-                handleFile(fileInput.files[0]);
-            }
+            handleFiles(fileInput.files);
         };
 
-        function handleFile(file) {
-            selectedFile = file;
-            document.getElementById('fileName').textContent = file.name;
-            document.getElementById('fileSize').textContent = formatSize(file.size);
-            document.getElementById('fileInfo').classList.add('visible');
-            dropzone.style.display = 'none';
+        function handleFiles(files) {
+            for (const file of files) {
+                if (!selectedFiles.some(f => f.name === file.name)) {
+                    selectedFiles.push(file);
+                }
+            }
+            renderFileList();
 
-            // Auto-detect installer type
-            const ext = file.name.split('.').pop().toLowerCase();
-            const typeMap = { msi: 'msi', exe: 'exe', ps1: 'ps1', bat: 'exe', cmd: 'exe' };
-            const type = typeMap[ext];
-            if (type) {
-                document.querySelectorAll('.type-btn').forEach(btn => {
-                    if (btn.dataset.type === type) btn.click();
-                });
+            // Auto-detect installer type from first exe/msi
+            if (!selectedType) {
+                for (const file of selectedFiles) {
+                    const ext = file.name.split('.').pop().toLowerCase();
+                    const typeMap = { msi: 'msi', exe: 'exe', ps1: 'ps1' };
+                    if (typeMap[ext]) {
+                        document.querySelectorAll('.type-btn').forEach(btn => {
+                            if (btn.dataset.type === typeMap[ext]) btn.click();
+                        });
+                        break;
+                    }
+                }
             }
         }
 
-        function removeFile() {
-            selectedFile = null;
-            document.getElementById('fileInfo').classList.remove('visible');
-            dropzone.style.display = 'block';
-            fileInput.value = '';
+        function renderFileList() {
+            const list = document.getElementById('fileList');
+            list.innerHTML = selectedFiles.map((f, i) => `
+                <div class="file-item">
+                    <span class="icon">📄</span>
+                    <span class="name">${f.name}</span>
+                    <span class="size">${formatSize(f.size)}</span>
+                    <span class="remove" onclick="removeFile(${i})">×</span>
+                </div>
+            `).join('');
+        }
+
+        function removeFile(index) {
+            selectedFiles.splice(index, 1);
+            renderFileList();
         }
 
         function formatSize(bytes) {
@@ -432,7 +437,7 @@
                 version: document.getElementById('pkgVersion').value.trim(),
                 priority: document.getElementById('pkgPriority').value || '0',
                 desc: document.getElementById('pkgDesc').value.trim(),
-                setupFile: selectedFile ? selectedFile.name : 'setup.exe',
+                setupFile: selectedFiles.length ? selectedFiles[0].name : 'setup.exe',
                 type: selectedType,
                 params: currentParams.join(' ')
             };
@@ -557,10 +562,10 @@ Message "Uninstalling " + $ProductId$ + "..."
             zip.file(folder + '/CLIENT_DATA/setup.opsiscript', makeSetup(d));
             zip.file(folder + '/CLIENT_DATA/uninstall.opsiscript', makeUninstall(d));
 
-            // Include the actual installer file
-            if (selectedFile) {
-                const fileData = await selectedFile.arrayBuffer();
-                zip.file(folder + '/CLIENT_DATA/' + selectedFile.name, fileData);
+            // Include all dropped files
+            for (const file of selectedFiles) {
+                const fileData = await file.arrayBuffer();
+                zip.file(folder + '/CLIENT_DATA/' + file.name, fileData);
             }
 
             const blob = await zip.generateAsync({type: 'blob'});
