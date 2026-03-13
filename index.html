@@ -808,12 +808,13 @@
 
         function handleFiles(files) {
             const executableExts = ['exe', 'msi', 'ps1', 'bat', 'cmd'];
+            const excludeExts = ['opsiscript', 'ins', 'opsiinc']; // OPSI script files
 
             for (const file of files) {
                 if (!selectedFiles.some(f => f.name === file.name)) {
                     const ext = file.name.split('.').pop().toLowerCase();
-                    // Auto-mark executables as installers
-                    file.isInstaller = executableExts.includes(ext);
+                    // Auto-mark executables as installers (but not OPSI scripts)
+                    file.isInstaller = executableExts.includes(ext) && !excludeExts.includes(ext);
                     selectedFiles.push(file);
                 }
             }
@@ -838,29 +839,44 @@
 
         function renderFileList() {
             const list = document.getElementById('fileList');
+            const executableExts = ['exe', 'msi', 'ps1', 'bat', 'cmd'];
+
             // Get installer order
             const installers = selectedFiles
                 .map((f, i) => ({ file: f, index: i }))
                 .filter(x => x.file.isInstaller);
 
             list.innerHTML = selectedFiles.map((f, i) => {
+                const ext = f.name.split('.').pop().toLowerCase();
+                const canBeInstaller = executableExts.includes(ext);
                 const isInstaller = f.isInstaller;
                 const orderNum = isInstaller ? installers.findIndex(x => x.index === i) + 1 : 0;
+
                 return `
                 <div class="file-item ${isInstaller ? 'is-installer' : ''}">
                     ${isInstaller ? `<span class="order-num">${orderNum}</span>` : '<span class="icon">📄</span>'}
                     <span class="name">${f.name}</span>
                     <span class="size">${formatSize(f.size)}</span>
-                    <button class="install-toggle ${isInstaller ? 'active' : ''}" onclick="toggleInstaller(${i})">
-                        ${isInstaller ? '✓ Install' : 'Mark as installer'}
-                    </button>
+                    ${canBeInstaller ? `
+                        <button class="install-toggle ${isInstaller ? 'active' : ''}" onclick="toggleInstaller(${i})">
+                            ${isInstaller ? '✓ Install' : 'Mark as installer'}
+                        </button>
+                    ` : ''}
                     <span class="remove" onclick="removeDroppedFile(${i})">×</span>
                 </div>
             `}).join('');
         }
 
         function toggleInstaller(index) {
-            selectedFiles[index].isInstaller = !selectedFiles[index].isInstaller;
+            const file = selectedFiles[index];
+            const ext = file.name.split('.').pop().toLowerCase();
+            const excludeExts = ['opsiscript', 'ins', 'opsiinc', 'txt', 'md', 'json', 'xml', 'ini', 'cfg', 'log'];
+
+            if (excludeExts.includes(ext) && !file.isInstaller) {
+                return; // Don't allow marking these as installers
+            }
+
+            file.isInstaller = !file.isInstaller;
             renderFileList();
         }
 
