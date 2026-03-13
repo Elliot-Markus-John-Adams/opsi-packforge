@@ -306,6 +306,72 @@
         }
         .add-item-btn:hover { border-color: #0af; color: #0af; }
 
+        .progress-container {
+            margin: 20px 0;
+            display: none;
+        }
+        .progress-bar {
+            height: 4px;
+            background: #333;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            background: #0af;
+            width: 0%;
+            transition: width 0.3s;
+        }
+        .progress-text {
+            font-size: 12px;
+            color: #666;
+            margin-top: 8px;
+        }
+
+        .install-guide {
+            margin-top: 20px;
+            padding: 20px;
+            background: #1a2a1a;
+            border: 1px solid #2a4a2a;
+        }
+        .install-guide h3 {
+            color: #8c8;
+            margin-bottom: 15px;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .install-step {
+            margin-bottom: 15px;
+        }
+        .install-step .step-num {
+            display: inline-block;
+            width: 22px;
+            height: 22px;
+            background: #2a4a2a;
+            color: #8c8;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 22px;
+            font-size: 12px;
+            margin-right: 10px;
+        }
+        .install-step .step-text {
+            color: #ccc;
+            font-size: 14px;
+        }
+        .install-step code {
+            display: block;
+            background: #111;
+            padding: 10px 12px;
+            margin: 8px 0 0 32px;
+            font-family: monospace;
+            font-size: 13px;
+            color: #0af;
+            border-left: 2px solid #0af;
+            user-select: all;
+        }
+
         .dep-item, .prop-item {
             background: #222;
             border: 1px solid #333;
@@ -470,8 +536,39 @@
         </section>
 
         <div class="actions">
-            <button class="btn-primary" onclick="generateProject()">Build</button>
+            <button class="btn-primary" id="buildBtn" onclick="generateProject()">Build</button>
             <button class="btn-primary" id="downloadBtn" style="display:none;" onclick="download()">Download .zip</button>
+        </div>
+
+        <div class="progress-container" id="progressContainer">
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <div class="progress-text" id="progressText">Initializing...</div>
+        </div>
+
+        <div class="install-guide" id="installGuide" style="display:none;">
+            <h3>Installation Steps</h3>
+            <div class="install-step">
+                <span class="step-num">1</span>
+                <span class="step-text">Download and extract to workbench</span>
+                <code id="cmd1"></code>
+            </div>
+            <div class="install-step">
+                <span class="step-num">2</span>
+                <span class="step-text">Build the package</span>
+                <code id="cmd2"></code>
+            </div>
+            <div class="install-step">
+                <span class="step-num">3</span>
+                <span class="step-text">Install to OPSI server</span>
+                <code id="cmd3"></code>
+            </div>
+            <div class="install-step">
+                <span class="step-num">4</span>
+                <span class="step-text">Deploy to clients via opsi-configed or:</span>
+                <code id="cmd4"></code>
+            </div>
         </div>
 
         <footer>
@@ -780,10 +877,35 @@ Message "Running user login script for " + $ProductId$ + "..."
 ; Can access user profile folders`
         };
 
-        function generateProject() {
+        async function generateProject() {
             const d = getData();
             if (!d.id || !d.name) { alert('Enter package ID and name'); return; }
             if (!selectedType) { alert('Select installer type'); return; }
+
+            // Show progress
+            const progress = document.getElementById('progressContainer');
+            const fill = document.getElementById('progressFill');
+            const text = document.getElementById('progressText');
+            const buildBtn = document.getElementById('buildBtn');
+
+            progress.style.display = 'block';
+            buildBtn.disabled = true;
+            buildBtn.textContent = 'Building...';
+
+            // Animate progress
+            const steps = [
+                { pct: 20, msg: 'Creating package structure...' },
+                { pct: 40, msg: 'Generating control file...' },
+                { pct: 60, msg: 'Creating setup script...' },
+                { pct: 80, msg: 'Creating uninstall script...' },
+                { pct: 100, msg: 'Done!' }
+            ];
+
+            for (const step of steps) {
+                fill.style.width = step.pct + '%';
+                text.textContent = step.msg;
+                await new Promise(r => setTimeout(r, 300));
+            }
 
             // Generate project files
             projectFiles = {
@@ -797,9 +919,27 @@ Message "Running user login script for " + $ProductId$ + "..."
                 projectFiles['CLIENT_DATA/' + f.name] = { binary: true, file: f };
             });
 
+            // Hide progress after a moment
+            await new Promise(r => setTimeout(r, 500));
+            progress.style.display = 'none';
+            fill.style.width = '0%';
+            buildBtn.disabled = false;
+            buildBtn.textContent = 'Build';
+
+            // Show project files
             renderFileTree(d.id);
             document.getElementById('projectSection').style.display = 'block';
             document.getElementById('downloadBtn').style.display = 'inline-block';
+
+            // Show install guide with actual commands
+            const ver = d.version || '1.0';
+            const pkgVer = d.packageVersion || '1';
+            document.getElementById('cmd1').textContent = `scp ${d.id}.zip root@opsi-server:/var/lib/opsi/workbench/ && ssh root@opsi-server "cd /var/lib/opsi/workbench && unzip ${d.id}.zip"`;
+            document.getElementById('cmd2').textContent = `cd /var/lib/opsi/workbench/${d.id} && opsi-makepackage`;
+            document.getElementById('cmd3').textContent = `opsi-package-manager -i ${d.id}_${ver}-${pkgVer}.opsi`;
+            document.getElementById('cmd4').textContent = `opsi-admin -d method setProductActionRequest ${d.id} <client-id> setup`;
+            document.getElementById('installGuide').style.display = 'block';
+
             document.getElementById('projectSection').scrollIntoView({ behavior: 'smooth' });
         }
 
