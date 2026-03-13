@@ -437,77 +437,60 @@
         function makeControl(d) {
             return `[Package]
 version: 1
-depends:
-incremental: False
 
 [Product]
 type: localboot
 id: ${d.id}
 name: ${d.name}
 description: ${d.desc || d.name}
-advice:
 version: ${d.version}
 priority: ${d.priority}
-licenseRequired: False
-productClasses:
-setupScript: setup.opsiscript
-uninstallScript: uninstall.opsiscript
-updateScript:
-alwaysScript:
-onceScript:`;
+setupScript: setup.ins
+uninstallScript: uninstall.ins`;
         }
 
         function makeSetup(d) {
-            let install = '';
             const params = d.params ? d.params + ' ' : '';
 
             if (d.type === 'ps1') {
-                install = `ShellCall_install
+                return `[Actions]
+requiredWinstVersion >= "4.11.3"
 
-[ShellCall_install]
-${params}"$SetupFile$"`;
-            } else {
-                install = `Winbatch_install
+DefVar $ProductId$
+Set $ProductId$ = "${d.id}"
 
-[Winbatch_install]
-${params}"$SetupFile$"`;
+Message "Installing " + $ProductId$ + "..."
+
+ShellCall_Install
+
+[ShellCall_Install]
+${params}"%ScriptPath%\\${d.setupFile}"`;
             }
 
-            return `; ${d.name} - setup script
+            return `[Actions]
+requiredWinstVersion >= "4.11.3"
 
-[Actions]
-requiredWinstVersion >= "4.11.6"
-
-DefVar $SetupFile$
 DefVar $ProductId$
-DefVar $ExitCode$
-
 Set $ProductId$ = "${d.id}"
-Set $SetupFile$ = "%ScriptPath%\\files\\${d.setupFile}"
 
-Message "Installing " + $ProductId$
+Message "Installing " + $ProductId$ + "..."
 
-ChangeDirectory "%ScriptPath%\\files"
-${install}
-Sub_check_exitcode
+Winbatch_Install
 
-[Sub_check_exitcode]
-set $ExitCode$ = getLastExitCode
-if ($ExitCode$ = "0")
-    comment "OK"
-else
-    logError "Failed: " + $ExitCode$
-    isFatalError
-endif`;
+[Winbatch_Install]
+${params}"%ScriptPath%\\${d.setupFile}"`;
         }
 
         function makeUninstall(d) {
-            return `; ${d.name} - uninstall script
+            return `[Actions]
+requiredWinstVersion >= "4.11.3"
 
-[Actions]
-Message "Uninstalling ${d.name}"
+DefVar $ProductId$
+Set $ProductId$ = "${d.id}"
 
-; TODO: add uninstall commands`;
+Message "Uninstalling " + $ProductId$ + "..."
+
+; TODO: Add uninstall commands`;
         }
 
         function preview() {
@@ -515,7 +498,7 @@ Message "Uninstalling ${d.name}"
             if (!d.id || !d.name) { alert('Enter package ID and name'); return; }
             const el = document.getElementById('preview');
             el.textContent = '=== OPSI/control ===\n\n' + makeControl(d) +
-                '\n\n=== CLIENT_DATA/setup.opsiscript ===\n\n' + makeSetup(d);
+                '\n\n=== CLIENT_DATA/setup.ins ===\n\n' + makeSetup(d);
             el.style.display = 'block';
         }
 
@@ -525,18 +508,18 @@ Message "Uninstalling ${d.name}"
             if (!selectedType) { alert('Select installer type'); return; }
 
             const zip = new JSZip();
-            const folder = d.id + '_' + d.version;
+            const folder = d.id;
 
             zip.folder(folder + '/OPSI');
-            zip.folder(folder + '/CLIENT_DATA/files');
+            zip.folder(folder + '/CLIENT_DATA');
             zip.file(folder + '/OPSI/control', makeControl(d));
-            zip.file(folder + '/CLIENT_DATA/setup.opsiscript', makeSetup(d));
-            zip.file(folder + '/CLIENT_DATA/uninstall.opsiscript', makeUninstall(d));
+            zip.file(folder + '/CLIENT_DATA/setup.ins', makeSetup(d));
+            zip.file(folder + '/CLIENT_DATA/uninstall.ins', makeUninstall(d));
 
-            // Include the actual file if selected
+            // Include the actual installer file
             if (selectedFile) {
                 const fileData = await selectedFile.arrayBuffer();
-                zip.file(folder + '/CLIENT_DATA/files/' + selectedFile.name, fileData);
+                zip.file(folder + '/CLIENT_DATA/' + selectedFile.name, fileData);
             }
 
             const blob = await zip.generateAsync({type: 'blob'});
