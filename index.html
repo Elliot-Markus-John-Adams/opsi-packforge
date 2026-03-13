@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OPSI PackForge</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -215,14 +216,14 @@
             padding: 0 6px;
         }
         .tree-file .remove-btn {
-            color: #666;
+            color: #a33;
             cursor: pointer;
             padding: 0 6px;
-            font-size: 14px;
+            font-size: 12px;
             opacity: 0;
         }
         .tree-file:hover .remove-btn { opacity: 1; }
-        .tree-file .remove-btn:hover { color: #f55; }
+        .tree-file .remove-btn:hover { color: #f44; }
 
         .editor-container {
             margin-top: 15px;
@@ -1011,7 +1012,7 @@ Message "Running user login script for " + $ProductId$ + "..."
                     <span>${icon}</span>
                     <span class="name">${name}</span>
                     <span style="color:#666;font-size:11px;">${formatSize(projectFiles[path].file.size)}</span>
-                    <span class="remove-btn" onclick="removeFile('${path}')" title="Remove">🗑</span>
+                    <span class="remove-btn" onclick="removeFile('${path}')" title="Remove"><i class="fa-solid fa-trash"></i></span>
                 </div>`;
             }
 
@@ -1019,7 +1020,7 @@ Message "Running user login script for " + $ProductId$ + "..."
                 <span>${icon}</span>
                 <span class="name" onclick="editFile('${path}')">${name}</span>
                 <span class="edit" onclick="editFile('${path}')">✎ edit</span>
-                <span class="remove-btn" onclick="removeFile('${path}')" title="Remove">🗑</span>
+                <span class="remove-btn" onclick="removeFile('${path}')" title="Remove"><i class="fa-solid fa-trash"></i></span>
             </div>`;
         }
 
