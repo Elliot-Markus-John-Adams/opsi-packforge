@@ -42,37 +42,41 @@
         }
         label { font-size: 13px; color: #888; }
 
-        .info-btn {
-            width: 16px;
-            height: 16px;
+        .info {
+            width: 14px;
+            height: 14px;
             border-radius: 50%;
-            background: #333;
-            color: #888;
-            font-size: 11px;
-            border: none;
-            cursor: help;
+            border: 1px solid #555;
+            color: #555;
+            font-size: 10px;
+            font-style: italic;
+            font-family: Georgia, serif;
             display: inline-flex;
             align-items: center;
             justify-content: center;
+            cursor: help;
             position: relative;
+            user-select: none;
         }
-        .info-btn:hover { background: #444; color: #fff; }
-        .info-btn .tooltip {
+        .info:hover { border-color: #888; color: #888; }
+        .info .tip {
             display: none;
             position: absolute;
-            bottom: 24px;
+            bottom: 20px;
             left: 50%;
             transform: translateX(-50%);
-            background: #333;
-            color: #fff;
-            padding: 8px 12px;
+            background: #222;
+            border: 1px solid #444;
+            color: #ccc;
+            padding: 6px 10px;
             border-radius: 4px;
-            font-size: 12px;
+            font-size: 11px;
+            font-style: normal;
+            font-family: system-ui, sans-serif;
             white-space: nowrap;
             z-index: 100;
-            font-weight: normal;
         }
-        .info-btn:hover .tooltip { display: block; }
+        .info:hover .tip { display: block; }
 
         input, select, textarea {
             width: 100%;
@@ -228,14 +232,14 @@
                 <div>
                     <div class="label-row">
                         <label>Package ID</label>
-                        <button class="info-btn">?<span class="tooltip">Unique identifier, lowercase, no spaces (e.g. firefox, vlc-player)</span></button>
+                        <span class="info">i<span class="tip">Unique identifier, lowercase, no spaces</span></span>
                     </div>
                     <input type="text" id="pkgId" placeholder="firefox">
                 </div>
                 <div>
                     <div class="label-row">
                         <label>Name</label>
-                        <button class="info-btn">?<span class="tooltip">Display name shown in OPSI</span></button>
+                        <span class="info">i<span class="tip">Display name shown in OPSI</span></span>
                     </div>
                     <input type="text" id="pkgName" placeholder="Mozilla Firefox">
                 </div>
@@ -244,16 +248,16 @@
                 <div>
                     <div class="label-row">
                         <label>Version</label>
-                        <button class="info-btn">?<span class="tooltip">Package version (e.g. 1.0.0, 2.1.3)</span></button>
+                        <span class="info">i<span class="tip">Software version (e.g. 1.0.0)</span></span>
                     </div>
                     <input type="text" id="pkgVersion" value="1.0.0">
                 </div>
                 <div>
                     <div class="label-row">
                         <label>Priority</label>
-                        <button class="info-btn">?<span class="tooltip">Installation priority 0-100. Higher = installs first</span></button>
+                        <span class="info">i<span class="tip">-100 to 100. Higher = installs first</span></span>
                     </div>
-                    <input type="number" id="pkgPriority" value="0" min="0" max="100">
+                    <input type="number" id="pkgPriority" value="0" min="-100" max="100">
                 </div>
             </div>
             <div>
@@ -443,39 +447,72 @@ type: localboot
 id: ${d.id}
 name: ${d.name}
 description: ${d.desc || d.name}
+advice:
 version: ${d.version}
 priority: ${d.priority}
-setupScript: setup.ins
-uninstallScript: uninstall.ins`;
+licenseRequired: False
+productClasses:
+setupScript: setup.opsiscript
+uninstallScript: uninstall.opsiscript
+updateScript:
+alwaysScript:
+onceScript:
+customScript:
+userLoginScript:`;
         }
 
         function makeSetup(d) {
             const params = d.params ? d.params + ' ' : '';
 
+            // Determine exit code function based on installer type
+            let exitCodeFunc = 'isGenericExitcodeFatal';
+            if (d.type === 'msi') exitCodeFunc = 'isMsiExitcodeFatal';
+            else if (d.type === 'inno') exitCodeFunc = 'isInnoExitcodeFatal';
+            else if (d.type === 'nsis') exitCodeFunc = 'isNsisExitcodeFatal';
+            else if (d.type === 'installshield') exitCodeFunc = 'isInstallshieldExitcodeFatal';
+
             if (d.type === 'ps1') {
                 return `[Actions]
-requiredWinstVersion >= "4.11.3"
+requiredOpsiscriptVersion >= "4.12.5.0"
 
 DefVar $ProductId$
+DefVar $ExitCode$
+
 Set $ProductId$ = "${d.id}"
 
 Message "Installing " + $ProductId$ + "..."
 
 ShellCall_Install
 
+set $ExitCode$ = getLastExitCode
+if not ($ExitCode$ = "0")
+	logError "Installation failed with exit code: " + $ExitCode$
+	isFatalError "Installation failed"
+endif
+
 [ShellCall_Install]
 ${params}"%ScriptPath%\\${d.setupFile}"`;
             }
 
             return `[Actions]
-requiredWinstVersion >= "4.11.3"
+requiredOpsiscriptVersion >= "4.12.5.0"
 
 DefVar $ProductId$
+DefVar $LogDir$
+DefVar $ExitCode$
+
 Set $ProductId$ = "${d.id}"
+Set $LogDir$ = "%opsiLogDir%"
 
 Message "Installing " + $ProductId$ + "..."
 
 Winbatch_Install
+
+set $ExitCode$ = getLastExitCode
+if not ($ExitCode$ = "0")
+	logError "Installation failed with exit code: " + $ExitCode$
+	isFatalError "Installation failed"
+endif
 
 [Winbatch_Install]
 ${params}"%ScriptPath%\\${d.setupFile}"`;
@@ -483,14 +520,18 @@ ${params}"%ScriptPath%\\${d.setupFile}"`;
 
         function makeUninstall(d) {
             return `[Actions]
-requiredWinstVersion >= "4.11.3"
+requiredOpsiscriptVersion >= "4.12.5.0"
 
 DefVar $ProductId$
+DefVar $ExitCode$
+
 Set $ProductId$ = "${d.id}"
 
 Message "Uninstalling " + $ProductId$ + "..."
 
-; TODO: Add uninstall commands`;
+; TODO: Add uninstall command
+; Example for MSI: msiexec /x {PRODUCT-GUID} /qn REBOOT=ReallySuppress
+; Example for EXE: "%ScriptPath%\\uninstall.exe" /S`;
         }
 
         function preview() {
@@ -498,7 +539,7 @@ Message "Uninstalling " + $ProductId$ + "..."
             if (!d.id || !d.name) { alert('Enter package ID and name'); return; }
             const el = document.getElementById('preview');
             el.textContent = '=== OPSI/control ===\n\n' + makeControl(d) +
-                '\n\n=== CLIENT_DATA/setup.ins ===\n\n' + makeSetup(d);
+                '\n\n=== CLIENT_DATA/setup.opsiscript ===\n\n' + makeSetup(d);
             el.style.display = 'block';
         }
 
@@ -513,8 +554,8 @@ Message "Uninstalling " + $ProductId$ + "..."
             zip.folder(folder + '/OPSI');
             zip.folder(folder + '/CLIENT_DATA');
             zip.file(folder + '/OPSI/control', makeControl(d));
-            zip.file(folder + '/CLIENT_DATA/setup.ins', makeSetup(d));
-            zip.file(folder + '/CLIENT_DATA/uninstall.ins', makeUninstall(d));
+            zip.file(folder + '/CLIENT_DATA/setup.opsiscript', makeSetup(d));
+            zip.file(folder + '/CLIENT_DATA/uninstall.opsiscript', makeUninstall(d));
 
             // Include the actual installer file
             if (selectedFile) {
