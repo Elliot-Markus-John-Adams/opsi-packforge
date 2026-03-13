@@ -192,6 +192,70 @@
         }
         .file-item .remove:hover { color: #f55; }
 
+        .file-tree { font-family: monospace; font-size: 13px; }
+        .tree-folder { color: #888; margin: 8px 0 4px 0; }
+        .tree-folder::before { content: '📁 '; }
+        .tree-file {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 8px 6px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .tree-file:hover { background: #252525; }
+        .tree-file .name { flex: 1; color: #ccc; }
+        .tree-file .edit { color: #0af; font-size: 12px; opacity: 0; }
+        .tree-file:hover .edit { opacity: 1; }
+        .tree-file.optional { opacity: 0.5; }
+        .tree-file.optional .name { color: #666; font-style: italic; }
+        .tree-file .add-btn {
+            color: #0a0;
+            font-weight: bold;
+            padding: 0 6px;
+        }
+        .tree-file.binary { cursor: default; }
+        .tree-file.binary:hover { background: transparent; }
+
+        .editor-container {
+            margin-top: 15px;
+            border: 1px solid #333;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .editor-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 12px;
+            background: #252525;
+            font-family: monospace;
+            font-size: 12px;
+            color: #0af;
+        }
+        .editor-close { cursor: pointer; color: #666; font-size: 18px; }
+        .editor-close:hover { color: #fff; }
+        #editorContent {
+            width: 100%;
+            min-height: 300px;
+            background: #0a0a0a;
+            border: none;
+            padding: 12px;
+            font-family: monospace;
+            font-size: 12px;
+            color: #0f0;
+            resize: vertical;
+        }
+        .btn-save {
+            width: 100%;
+            padding: 8px;
+            background: #0a0;
+            color: #000;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .btn-save:hover { background: #0c0; }
+
         .actions { display: flex; gap: 10px; margin-top: 20px; }
         button {
             padding: 12px 24px;
@@ -297,12 +361,23 @@
             <div class="file-list" id="fileList"></div>
         </section>
 
-        <div class="actions">
-            <button class="btn-secondary" onclick="preview()">Preview</button>
-            <button class="btn-primary" onclick="download()">Download .zip</button>
-        </div>
+        <section id="projectSection" style="display:none;">
+            <h2>Project Files</h2>
+            <div class="file-tree" id="fileTree"></div>
+            <div class="editor-container" id="editorContainer" style="display:none;">
+                <div class="editor-header">
+                    <span id="editorFileName"></span>
+                    <span class="editor-close" onclick="closeEditor()">×</span>
+                </div>
+                <textarea id="editorContent"></textarea>
+                <button class="btn-save" onclick="saveEditor()">Save</button>
+            </div>
+        </section>
 
-        <pre class="preview" id="preview"></pre>
+        <div class="actions">
+            <button class="btn-primary" onclick="generateProject()">Generate Project</button>
+            <button class="btn-primary" id="downloadBtn" style="display:none;" onclick="download()">Download .zip</button>
+        </div>
 
         <footer>
             <a href="https://github.com/Elliot-Markus-John-Adams/opsi-packforge">GitHub</a>
@@ -430,6 +505,136 @@
             return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
         }
 
+        // Project files storage
+        let projectFiles = {};
+        let currentEditFile = null;
+
+        const optionalFiles = {
+            'OPSI/preinst': '#!/bin/bash\n# Runs on depot BEFORE package is installed\n# Available: $PRODUCT_ID, $PRODUCT_VERSION, $CLIENT_DATA_DIR\n\nexit 0',
+            'OPSI/postinst': '#!/bin/bash\n# Runs on depot AFTER package is installed\n# Available: $PRODUCT_ID, $PRODUCT_VERSION, $CLIENT_DATA_DIR\n\nexit 0',
+            'OPSI/changelog.txt': ''
+        };
+
+        function generateProject() {
+            const d = getData();
+            if (!d.id || !d.name) { alert('Enter package ID and name'); return; }
+            if (!selectedType) { alert('Select installer type'); return; }
+
+            // Generate project files
+            projectFiles = {
+                'OPSI/control': makeControl(d),
+                'CLIENT_DATA/setup.opsiscript': makeSetup(d),
+                'CLIENT_DATA/uninstall.opsiscript': makeUninstall(d)
+            };
+
+            // Add dropped files as binary markers
+            selectedFiles.forEach(f => {
+                projectFiles['CLIENT_DATA/' + f.name] = { binary: true, file: f };
+            });
+
+            renderFileTree(d.id);
+            document.getElementById('projectSection').style.display = 'block';
+            document.getElementById('downloadBtn').style.display = 'inline-block';
+            document.getElementById('projectSection').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function renderFileTree(productId) {
+            const tree = document.getElementById('fileTree');
+            let html = `<div class="tree-folder">${productId}/</div>`;
+
+            // OPSI folder
+            html += `<div class="tree-folder" style="margin-left:15px;">OPSI/</div>`;
+            html += renderFileItem('OPSI/control');
+
+            // Optional OPSI files
+            if (!projectFiles['OPSI/preinst']) {
+                html += renderOptionalFile('OPSI/preinst');
+            } else {
+                html += renderFileItem('OPSI/preinst');
+            }
+            if (!projectFiles['OPSI/postinst']) {
+                html += renderOptionalFile('OPSI/postinst');
+            } else {
+                html += renderFileItem('OPSI/postinst');
+            }
+            if (!projectFiles['OPSI/changelog.txt']) {
+                html += renderOptionalFile('OPSI/changelog.txt');
+            } else {
+                html += renderFileItem('OPSI/changelog.txt');
+            }
+
+            // CLIENT_DATA folder
+            html += `<div class="tree-folder" style="margin-left:15px;">CLIENT_DATA/</div>`;
+
+            Object.keys(projectFiles).filter(k => k.startsWith('CLIENT_DATA/')).forEach(path => {
+                html += renderFileItem(path);
+            });
+
+            tree.innerHTML = html;
+        }
+
+        function renderFileItem(path) {
+            const name = path.split('/').pop();
+            const isBinary = projectFiles[path]?.binary;
+            const icon = isBinary ? '📄' : '📝';
+
+            if (isBinary) {
+                return `<div class="tree-file binary" style="margin-left:30px;">
+                    <span>${icon}</span>
+                    <span class="name">${name}</span>
+                    <span style="color:#666;font-size:11px;">${formatSize(projectFiles[path].file.size)}</span>
+                </div>`;
+            }
+
+            return `<div class="tree-file" style="margin-left:30px;" onclick="editFile('${path}')">
+                <span>${icon}</span>
+                <span class="name">${name}</span>
+                <span class="edit">✎ edit</span>
+            </div>`;
+        }
+
+        function renderOptionalFile(path) {
+            const name = path.split('/').pop();
+            return `<div class="tree-file optional" style="margin-left:30px;" onclick="addOptionalFile('${path}')">
+                <span>📄</span>
+                <span class="name">${name}</span>
+                <span class="add-btn">+ add</span>
+            </div>`;
+        }
+
+        function addOptionalFile(path) {
+            projectFiles[path] = optionalFiles[path] || '';
+            if (path === 'OPSI/changelog.txt') {
+                const d = getData();
+                projectFiles[path] = `${d.id} (${d.version || '1.0'}-1) stable; urgency=low
+
+  * Initial release
+
+ -- Your Name <your@email.com>  ${new Date().toUTCString()}`;
+            }
+            renderFileTree(getData().id);
+            editFile(path);
+        }
+
+        function editFile(path) {
+            currentEditFile = path;
+            document.getElementById('editorFileName').textContent = path;
+            document.getElementById('editorContent').value = projectFiles[path];
+            document.getElementById('editorContainer').style.display = 'block';
+        }
+
+        function saveEditor() {
+            if (currentEditFile) {
+                projectFiles[currentEditFile] = document.getElementById('editorContent').value;
+            }
+        }
+
+        function closeEditor() {
+            saveEditor();
+            document.getElementById('editorContainer').style.display = 'none';
+            currentEditFile = null;
+        }
+
         function getData() {
             return {
                 id: document.getElementById('pkgId').value.trim(),
@@ -539,33 +744,24 @@ Message "Uninstalling " + $ProductId$ + "..."
 ; Example for EXE: "%ScriptPath%\\uninstall.exe" /S`;
         }
 
-        function preview() {
-            const d = getData();
-            if (!d.id || !d.name) { alert('Enter package ID and name'); return; }
-            const el = document.getElementById('preview');
-            el.textContent = '=== OPSI/control ===\n\n' + makeControl(d) +
-                '\n\n=== CLIENT_DATA/setup.opsiscript ===\n\n' + makeSetup(d);
-            el.style.display = 'block';
-        }
-
         async function download() {
             const d = getData();
-            if (!d.id || !d.name) { alert('Enter package ID and name'); return; }
-            if (!selectedType) { alert('Select installer type'); return; }
+            if (!d.id) { alert('Generate project first'); return; }
 
             const zip = new JSZip();
             const folder = d.id;
 
             zip.folder(folder + '/OPSI');
             zip.folder(folder + '/CLIENT_DATA');
-            zip.file(folder + '/OPSI/control', makeControl(d));
-            zip.file(folder + '/CLIENT_DATA/setup.opsiscript', makeSetup(d));
-            zip.file(folder + '/CLIENT_DATA/uninstall.opsiscript', makeUninstall(d));
 
-            // Include all dropped files
-            for (const file of selectedFiles) {
-                const fileData = await file.arrayBuffer();
-                zip.file(folder + '/CLIENT_DATA/' + file.name, fileData);
+            // Add all project files
+            for (const [path, content] of Object.entries(projectFiles)) {
+                if (content?.binary) {
+                    const fileData = await content.file.arrayBuffer();
+                    zip.file(folder + '/' + path, fileData);
+                } else {
+                    zip.file(folder + '/' + path, content);
+                }
             }
 
             const blob = await zip.generateAsync({type: 'blob'});
