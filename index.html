@@ -434,9 +434,35 @@
 
         footer { text-align: center; color: #444; margin-top: 30px; font-size: 13px; }
         footer a { color: #0af; text-decoration: none; }
+
+        .tabs {
+            max-width: 700px;
+            margin: 0 auto 20px auto;
+            display: flex;
+            gap: 0;
+            border-bottom: 1px solid #333;
+        }
+        .tabs a {
+            padding: 12px 24px;
+            color: #666;
+            text-decoration: none;
+            font-size: 14px;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -1px;
+        }
+        .tabs a:hover { color: #aaa; }
+        .tabs a.active {
+            color: #0af;
+            border-bottom-color: #0af;
+        }
     </style>
 </head>
 <body>
+    <nav class="tabs">
+        <a href="index.html" class="active">OPSI PackForge</a>
+        <a href="ucs-import.html">UCS Import</a>
+    </nav>
+
     <div class="container">
         <h1>OPSI PackForge</h1>
         <p class="sub">Create OPSI package structure</p>

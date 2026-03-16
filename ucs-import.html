@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UCS Device Importer</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: #111;
+            color: #ccc;
+            line-height: 1.5;
+            padding: 20px;
+        }
+        .container { max-width: 900px; margin: 0 auto; }
+        h1 { color: #fff; margin-bottom: 5px; }
+        .sub { color: #666; margin-bottom: 30px; }
+
+        section {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            padding: 20px;
+            margin-bottom: 15px;
+        }
+        section h2 {
+            font-size: 14px;
+            text-transform: uppercase;
+            color: #888;
+            margin-bottom: 15px;
+            letter-spacing: 1px;
+        }
+
+        .row { display: flex; gap: 15px; margin-bottom: 12px; }
+        .row > * { flex: 1; }
+
+        label { font-size: 13px; color: #888; display: block; margin-bottom: 4px; }
+
+        input, select, textarea {
+            width: 100%;
+            background: #222;
+            border: 1px solid #444;
+            padding: 10px;
+            color: #fff;
+            font-size: 14px;
+        }
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #0af;
+        }
+
+        .dropzone {
+            border: 2px dashed #444;
+            border-radius: 8px;
+            padding: 30px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .dropzone:hover, .dropzone.dragover {
+            border-color: #0af;
+            background: rgba(0, 170, 255, 0.05);
+        }
+        .dropzone-icon { font-size: 32px; margin-bottom: 10px; }
+        .dropzone-text { color: #888; font-size: 14px; }
+        .dropzone-text span { color: #0af; }
+        .dropzone-hint { color: #555; font-size: 12px; margin-top: 5px; }
+
+        .or-divider {
+            text-align: center;
+            color: #555;
+            margin: 15px 0;
+            font-size: 12px;
+        }
+
+        .paste-area {
+            width: 100%;
+            min-height: 120px;
+            background: #222;
+            border: 1px solid #444;
+            padding: 10px;
+            color: #fff;
+            font-family: monospace;
+            font-size: 12px;
+            resize: vertical;
+        }
+        .paste-area:focus {
+            outline: none;
+            border-color: #0af;
+        }
+
+        .stats {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 15px;
+        }
+        .stat {
+            background: #222;
+            padding: 12px 20px;
+            border-radius: 4px;
+        }
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #0af;
+        }
+        .stat-label {
+            font-size: 11px;
+            color: #666;
+            text-transform: uppercase;
+        }
+
+        .preview-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+            margin-top: 10px;
+        }
+        .preview-table th {
+            background: #252525;
+            padding: 8px;
+            text-align: left;
+            color: #888;
+            font-weight: normal;
+            text-transform: uppercase;
+            font-size: 11px;
+            border-bottom: 1px solid #333;
+        }
+        .preview-table td {
+            padding: 8px;
+            border-bottom: 1px solid #222;
+            color: #ccc;
+        }
+        .preview-table tr:hover td {
+            background: #1f1f1f;
+        }
+        .preview-table .mac, .preview-table .ip {
+            font-family: monospace;
+            color: #0af;
+        }
+        .preview-scroll {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .mapping-row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .mapping-row label {
+            width: 120px;
+            margin: 0;
+            color: #ccc;
+        }
+        .mapping-row select {
+            flex: 1;
+        }
+
+        .output-area {
+            width: 100%;
+            min-height: 200px;
+            background: #0a0a0a;
+            border: 1px solid #333;
+            padding: 15px;
+            color: #0a0;
+            font-family: monospace;
+            font-size: 12px;
+            white-space: pre;
+            overflow-x: auto;
+            resize: vertical;
+        }
+
+        .actions { display: flex; gap: 10px; margin-top: 15px; }
+        button {
+            padding: 12px 24px;
+            font-size: 14px;
+            cursor: pointer;
+            border: none;
+        }
+        .btn-primary { background: #0af; color: #000; font-weight: 600; }
+        .btn-primary:hover { background: #0cf; }
+        .btn-secondary { background: #333; color: #ccc; }
+        .btn-secondary:hover { background: #444; }
+        .btn-success { background: #2a4a2a; color: #8c8; border: 1px solid #3a5a3a; }
+        .btn-success:hover { background: #3a5a3a; }
+
+        .copy-feedback {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: #2a4a2a;
+            color: #8c8;
+            padding: 12px 20px;
+            border-radius: 4px;
+            display: none;
+            animation: fadeIn 0.3s;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        footer { text-align: center; color: #444; margin-top: 30px; font-size: 13px; }
+        footer a { color: #0af; text-decoration: none; }
+
+        .tabs {
+            max-width: 900px;
+            margin: 0 auto 20px auto;
+            display: flex;
+            gap: 0;
+            border-bottom: 1px solid #333;
+        }
+        .tabs a {
+            padding: 12px 24px;
+            color: #666;
+            text-decoration: none;
+            font-size: 14px;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -1px;
+        }
+        .tabs a:hover { color: #aaa; }
+        .tabs a.active {
+            color: #0af;
+            border-bottom-color: #0af;
+        }
+
+        .hidden { display: none !important; }
+
+        .info-box {
+            background: #1a2a3a;
+            border: 1px solid #2a4a5a;
+            padding: 12px 15px;
+            margin-bottom: 15px;
+            font-size: 13px;
+            color: #8ac;
+        }
+        .info-box i { margin-right: 8px; }
+
+        .section-title {
+            font-size: 12px;
+            color: #666;
+            margin: 15px 0 10px 0;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+    </style>
+</head>
+<body>
+    <nav class="tabs">
+        <a href="index.html">OPSI PackForge</a>
+        <a href="ucs-import.html" class="active">UCS Import</a>
+    </nav>
+
+    <div class="container">
+        <h1>UCS Device Importer</h1>
+        <p class="sub">Excel/CSV zu UCS udm Commands</p>
+
+        <section>
+            <h2>1. Daten importieren</h2>
+
+            <div class="dropzone" id="dropzone">
+                <div class="dropzone-icon"><i class="fa-solid fa-file-excel"></i></div>
+                <div class="dropzone-text">Excel-Datei hierher ziehen oder <span>durchsuchen</span></div>
+                <div class="dropzone-hint">.xlsx, .xls, .csv</div>
+            </div>
+            <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" style="display:none">
+
+            <div class="or-divider">- oder Daten einfuegen -</div>
+
+            <label>Tab-separierte Daten (aus Excel kopiert)</label>
+            <textarea class="paste-area" id="pasteArea" placeholder="Name&#9;Model&#9;OS&#9;Connected&#9;WiFi MAC&#9;Serial...
+FR_ 1&#9;iPad (11th Gen.)&#9;iPadOS 26.3.1&#9;2026-03-12&#9;f4:b5:99:05:fb:dc&#9;D5PQNVQ0L0..."></textarea>
+
+            <div class="actions">
+                <button class="btn-secondary" onclick="parsePastedData()">Daten parsen</button>
+            </div>
+        </section>
+
+        <section id="mappingSection" class="hidden">
+            <h2>2. MAC-Spalte waehlen</h2>
+
+            <div class="mapping-row">
+                <label>MAC-Adresse:</label>
+                <select id="mapMac"></select>
+            </div>
+        </section>
+
+        <section id="configSection" class="hidden">
+            <h2>3. UCS Konfiguration</h2>
+
+            <div class="section-title">Hostname</div>
+            <div class="row">
+                <div>
+                    <label>Hostname Prefix</label>
+                    <input type="text" id="hostnamePrefix" value="ipad" placeholder="ipad">
+                </div>
+                <div>
+                    <label>Start-Nummer</label>
+                    <input type="number" id="startNumber" value="1" min="1">
+                </div>
+                <div>
+                    <label>Ziffern (z.B. 2 = 01, 02)</label>
+                    <input type="number" id="digitCount" value="2" min="1" max="4">
+                </div>
+            </div>
+
+            <div class="section-title">IP-Adresse</div>
+            <div class="row">
+                <div style="flex:3">
+                    <label>IP Subnet (erste 3 Oktette)</label>
+                    <input type="text" id="ipSubnet" value="10.2.0" placeholder="10.2.0">
+                </div>
+                <div style="flex:1">
+                    <label>Start IP</label>
+                    <input type="number" id="startIp" value="101" min="1" max="254">
+                </div>
+            </div>
+
+            <div class="section-title">LDAP / DNS / DHCP</div>
+            <div class="row">
+                <div>
+                    <label>Position (OU)</label>
+                    <input type="text" id="ldapPosition" value="cn=computers,ou=schule,dc=paedml-linux,dc=lokal">
+                </div>
+            </div>
+            <div class="row">
+                <div>
+                    <label>Network DN</label>
+                    <input type="text" id="networkDn" value="cn=schule-10.2.0.0,cn=networks,ou=schule,dc=paedml-linux,dc=lokal">
+                </div>
+            </div>
+            <div class="row">
+                <div>
+                    <label>DNS Forward Zone</label>
+                    <input type="text" id="dnsForward" value="zoneName=paedml-linux.lokal,cn=dns,dc=paedml-linux,dc=lokal">
+                </div>
+            </div>
+            <div class="row">
+                <div>
+                    <label>DNS Reverse Zone</label>
+                    <input type="text" id="dnsReverse" value="zoneName=2.10.in-addr.arpa,cn=dns,dc=paedml-linux,dc=lokal">
+                </div>
+            </div>
+            <div class="row">
+                <div>
+                    <label>DHCP Zone</label>
+                    <input type="text" id="dhcpZone" value="cn=schule,cn=dhcp,ou=schule,dc=paedml-linux,dc=lokal">
+                </div>
+            </div>
+
+            <div class="actions">
+                <button class="btn-primary" onclick="generateCommands()">
+                    <i class="fa-solid fa-terminal"></i> Commands generieren
+                </button>
+            </div>
+        </section>
+
+        <section id="previewSection" class="hidden">
+            <h2>Vorschau</h2>
+
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-value" id="deviceCount">0</div>
+                    <div class="stat-label">Geraete</div>
+                </div>
+            </div>
+
+            <div class="preview-scroll">
+                <table class="preview-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Hostname</th>
+                            <th>IP</th>
+                            <th>MAC-Adresse</th>
+                        </tr>
+                    </thead>
+                    <tbody id="previewBody"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <section id="outputSection" class="hidden">
+            <h2>4. UCS Commands</h2>
+
+            <pre class="output-area" id="outputArea"></pre>
+
+            <div class="actions">
+                <button class="btn-success" onclick="copyToClipboard()">
+                    <i class="fa-solid fa-copy"></i> In Zwischenablage kopieren
+                </button>
+                <button class="btn-secondary" onclick="downloadScript()">
+                    <i class="fa-solid fa-download"></i> Als .sh speichern
+                </button>
+            </div>
+        </section>
+
+        <footer>
+            <a href="https://github.com/Elliot-Markus-John-Adams/opsi-packforge">GitHub</a>
+        </footer>
+    </div>
+
+    <div class="copy-feedback" id="copyFeedback">
+        <i class="fa-solid fa-check"></i> In Zwischenablage kopiert!
+    </div>
+
+    <script>
+        let parsedData = [];
+        let headers = [];
+
+        // File drag & drop
+        const dropzone = document.getElementById('dropzone');
+        const fileInput = document.getElementById('fileInput');
+
+        dropzone.onclick = () => fileInput.click();
+
+        dropzone.ondragover = (e) => {
+            e.preventDefault();
+            dropzone.classList.add('dragover');
+        };
+
+        dropzone.ondragleave = () => {
+            dropzone.classList.remove('dragover');
+        };
+
+        dropzone.ondrop = (e) => {
+            e.preventDefault();
+            dropzone.classList.remove('dragover');
+            if (e.dataTransfer.files.length) {
+                handleFile(e.dataTransfer.files[0]);
+            }
+        };
+
+        fileInput.onchange = () => {
+            if (fileInput.files.length) {
+                handleFile(fileInput.files[0]);
+            }
+        };
+
+        function handleFile(file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+
+                if (jsonData.length > 0) {
+                    headers = jsonData[0].map(h => String(h).trim());
+                    parsedData = jsonData.slice(1).map(row => {
+                        const obj = {};
+                        headers.forEach((h, i) => {
+                            obj[h] = row[i] !== undefined ? String(row[i]).trim() : '';
+                        });
+                        return obj;
+                    }).filter(row => Object.values(row).some(v => v));
+
+                    showMappingSection();
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function parsePastedData() {
+            const text = document.getElementById('pasteArea').value.trim();
+            if (!text) return;
+
+            const lines = text.split('\n').filter(l => l.trim());
+            if (lines.length < 2) {
+                alert('Mindestens Header-Zeile und eine Datenzeile benoetigt');
+                return;
+            }
+
+            const delimiter = lines[0].includes('\t') ? '\t' : /\s{2,}/;
+
+            headers = lines[0].split(delimiter).map(h => h.trim());
+            parsedData = lines.slice(1).map(line => {
+                const values = line.split(delimiter).map(v => v.trim());
+                const obj = {};
+                headers.forEach((h, i) => {
+                    obj[h] = values[i] || '';
+                });
+                return obj;
+            }).filter(row => Object.values(row).some(v => v));
+
+            showMappingSection();
+        }
+
+        function showMappingSection() {
+            const select = document.getElementById('mapMac');
+            select.innerHTML = '';
+            headers.forEach(h => {
+                const opt = document.createElement('option');
+                opt.value = h;
+                opt.textContent = h;
+                if (h.toLowerCase().includes('mac') || h.toLowerCase().includes('wifi')) {
+                    opt.selected = true;
+                }
+                select.appendChild(opt);
+            });
+
+            document.getElementById('mappingSection').classList.remove('hidden');
+            document.getElementById('configSection').classList.remove('hidden');
+            document.getElementById('previewSection').classList.remove('hidden');
+
+            document.getElementById('deviceCount').textContent = parsedData.length;
+            updatePreview();
+        }
+
+        function updatePreview() {
+            const macCol = document.getElementById('mapMac').value;
+            const prefix = document.getElementById('hostnamePrefix').value;
+            const startNum = parseInt(document.getElementById('startNumber').value) || 1;
+            const digits = parseInt(document.getElementById('digitCount').value) || 2;
+            const subnet = document.getElementById('ipSubnet').value;
+            const startIp = parseInt(document.getElementById('startIp').value) || 101;
+
+            const tbody = document.getElementById('previewBody');
+            tbody.innerHTML = '';
+
+            parsedData.forEach((row, i) => {
+                const mac = macCol ? row[macCol] : '';
+                const num = startNum + i;
+                const hostname = prefix + String(num).padStart(digits, '0');
+                const ip = subnet + '.' + (startIp + i);
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${i + 1}</td>
+                    <td>${hostname}</td>
+                    <td class="ip">${ip}</td>
+                    <td class="mac">${mac || '-'}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // Update preview on config change
+        ['mapMac', 'hostnamePrefix', 'startNumber', 'digitCount', 'ipSubnet', 'startIp'].forEach(id => {
+            document.getElementById(id).oninput = updatePreview;
+            document.getElementById(id).onchange = updatePreview;
+        });
+
+        function generateCommands() {
+            const macCol = document.getElementById('mapMac').value;
+            const prefix = document.getElementById('hostnamePrefix').value;
+            const startNum = parseInt(document.getElementById('startNumber').value) || 1;
+            const digits = parseInt(document.getElementById('digitCount').value) || 2;
+            const subnet = document.getElementById('ipSubnet').value;
+            const startIp = parseInt(document.getElementById('startIp').value) || 101;
+            const position = document.getElementById('ldapPosition').value.trim();
+            const network = document.getElementById('networkDn').value.trim();
+            const dnsForward = document.getElementById('dnsForward').value.trim();
+            const dnsReverse = document.getElementById('dnsReverse').value.trim();
+            const dhcpZone = document.getElementById('dhcpZone').value.trim();
+
+            if (!macCol) {
+                alert('Bitte MAC-Spalte waehlen');
+                return;
+            }
+            if (!position) {
+                alert('Bitte LDAP Position angeben');
+                return;
+            }
+
+            let commands = '';
+
+            parsedData.forEach((row, i) => {
+                const mac = row[macCol];
+                if (!mac) return;
+
+                const num = startNum + i;
+                const hostname = prefix + String(num).padStart(digits, '0');
+                const ip = subnet + '.' + (startIp + i);
+
+                let cmd = `udm computers/ipmanagedclient create --position "${position}" --set name="${hostname}" --set ip="${ip}" --set mac="${mac.toLowerCase()}"`;
+
+                if (network) {
+                    cmd += ` --set network="${network}"`;
+                }
+                if (dnsForward) {
+                    cmd += ` --set dnsEntryZoneForward="${dnsForward} ${ip}"`;
+                }
+                if (dnsReverse) {
+                    cmd += ` --set dnsEntryZoneReverse="${dnsReverse} ${ip}"`;
+                }
+                if (dhcpZone) {
+                    cmd += ` --set dhcpEntryZone="${dhcpZone} ${ip} ${mac.toLowerCase()}"`;
+                }
+
+                commands += cmd + '\n';
+            });
+
+            document.getElementById('outputArea').textContent = commands;
+            document.getElementById('outputSection').classList.remove('hidden');
+            document.getElementById('outputSection').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function copyToClipboard() {
+            const text = document.getElementById('outputArea').textContent;
+            navigator.clipboard.writeText(text).then(() => {
+                const feedback = document.getElementById('copyFeedback');
+                feedback.style.display = 'block';
+                setTimeout(() => { feedback.style.display = 'none'; }, 2000);
+            });
+        }
+
+        function downloadScript() {
+            const text = document.getElementById('outputArea').textContent;
+            const blob = new Blob([text], { type: 'text/x-shellscript' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'ucs-import-' + new Date().toISOString().slice(0,10) + '.sh';
+            a.click();
+        }
+    </script>
+</body>
+</html>
