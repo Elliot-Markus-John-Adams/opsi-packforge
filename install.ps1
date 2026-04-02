@@ -53,27 +53,54 @@ if ($pythonExe) {
 
 if (-not $pythonOk) {
     Write-Host "  [!] Python with tkinter not found" -ForegroundColor Yellow
-    Write-Host "  [*] Installing Python via winget..." -ForegroundColor Cyan
 
-    winget install Python.Python.3.12 --source winget --silent --accept-package-agreements --accept-source-agreements 2>$null
+    # Try winget first
+    Write-Host "  [*] Trying winget..." -ForegroundColor Cyan
+    $wingetResult = winget install Python.Python.3.12 --source winget --silent --accept-package-agreements --accept-source-agreements 2>&1
 
     # Refresh PATH
     $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
-
-    # Find Python again after install
     Start-Sleep -Seconds 2
     $pythonExe = Find-Python
 
+    # If winget failed, download directly from python.org
     if (-not $pythonExe) {
-        Write-Host "  [!] Python not in PATH yet. Searching..." -ForegroundColor Yellow
-        $pythonExe = "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe"
-        if (-not (Test-Path $pythonExe)) {
-            Write-Host "  [ERROR] Could not find Python after installation" -ForegroundColor Red
-            Write-Host "  Please restart PowerShell and run this command again." -ForegroundColor Yellow
-            Write-Host ""
-            pause
-            exit 1
+        Write-Host "  [!] Winget failed, downloading from python.org..." -ForegroundColor Yellow
+
+        $pythonInstaller = "$env:TEMP\python-installer.exe"
+        $pythonUrl = "https://www.python.org/ftp/python/3.12.4/python-3.12.4-amd64.exe"
+
+        try {
+            Write-Host "  [*] Downloading Python 3.12..." -ForegroundColor Cyan
+            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+            (New-Object System.Net.WebClient).DownloadFile($pythonUrl, $pythonInstaller)
+
+            Write-Host "  [*] Installing Python (this may take a minute)..." -ForegroundColor Cyan
+            Start-Process -FilePath $pythonInstaller -ArgumentList "/quiet", "InstallAllUsers=0", "PrependPath=1", "Include_test=0" -Wait
+
+            Remove-Item $pythonInstaller -Force -ErrorAction SilentlyContinue
+
+            # Refresh PATH again
+            $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+            Start-Sleep -Seconds 2
+            $pythonExe = Find-Python
+        } catch {
+            Write-Host "  [ERROR] Download failed: $_" -ForegroundColor Red
         }
+    }
+
+    if (-not $pythonExe) {
+        Write-Host ""
+        Write-Host "  [ERROR] Could not install Python automatically" -ForegroundColor Red
+        Write-Host ""
+        Write-Host "  Please install Python manually:" -ForegroundColor Yellow
+        Write-Host "  1. Go to https://python.org/downloads" -ForegroundColor White
+        Write-Host "  2. Download Python 3.12" -ForegroundColor White
+        Write-Host "  3. Run installer with 'Add to PATH' checked!" -ForegroundColor White
+        Write-Host "  4. Then run this script again" -ForegroundColor White
+        Write-Host ""
+        pause
+        exit 1
     }
     Write-Host "  [OK] Python installed: $pythonExe" -ForegroundColor Green
 }
