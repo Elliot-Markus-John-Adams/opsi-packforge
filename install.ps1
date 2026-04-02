@@ -1,7 +1,7 @@
 # OPSI PackForge - One-Line Installer
 # Usage: irm https://raw.githubusercontent.com/elliot-markus-john-adams/opsi-packforge/main/install.ps1 | iex
 
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "SilentlyContinue"
 $installDir = "$env:LOCALAPPDATA\OPSI-PackForge"
 $appScript = "$installDir\packforge.pyw"
 $repoBase = "https://raw.githubusercontent.com/elliot-markus-john-adams/opsi-packforge/main"
@@ -11,31 +11,71 @@ Write-Host "  OPSI PackForge Installer" -ForegroundColor Cyan
 Write-Host "  ========================" -ForegroundColor Cyan
 Write-Host ""
 
+# Function to find Python executable
+function Find-Python {
+    # Check PATH first
+    $pythonPath = Get-Command python -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source
+    if ($pythonPath) { return $pythonPath }
+
+    # Check common install locations
+    $locations = @(
+        "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe",
+        "$env:LOCALAPPDATA\Programs\Python\Python311\python.exe",
+        "$env:LOCALAPPDATA\Programs\Python\Python310\python.exe",
+        "C:\Python312\python.exe",
+        "C:\Python311\python.exe",
+        "$env:ProgramFiles\Python312\python.exe",
+        "$env:ProgramFiles\Python311\python.exe"
+    )
+    foreach ($loc in $locations) {
+        if (Test-Path $loc) { return $loc }
+    }
+    return $null
+}
+
+function Find-Pythonw {
+    $python = Find-Python
+    if ($python) {
+        $pythonw = $python -replace "python\.exe$", "pythonw.exe"
+        if (Test-Path $pythonw) { return $pythonw }
+    }
+    return $null
+}
+
 # Check if Python with tkinter is available
+$pythonExe = Find-Python
 $pythonOk = $false
-try {
-    $result = python -c "import tkinter; print('ok')" 2>$null
+
+if ($pythonExe) {
+    $result = & $pythonExe -c "import tkinter; print('ok')" 2>$null
     if ($result -eq "ok") { $pythonOk = $true }
-} catch {}
+}
 
 if (-not $pythonOk) {
     Write-Host "  [!] Python with tkinter not found" -ForegroundColor Yellow
     Write-Host "  [*] Installing Python via winget..." -ForegroundColor Cyan
 
-    try {
-        winget install Python.Python.3.12 --silent --accept-package-agreements --accept-source-agreements
+    winget install Python.Python.3.12 --source winget --silent --accept-package-agreements --accept-source-agreements 2>$null
 
-        # Refresh PATH
-        $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+    # Refresh PATH
+    $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
 
-        Write-Host "  [OK] Python installed" -ForegroundColor Green
-    } catch {
-        Write-Host "  [ERROR] Could not install Python automatically" -ForegroundColor Red
-        Write-Host "  Please install Python manually: https://python.org/downloads" -ForegroundColor Yellow
-        Write-Host "  Make sure to check 'Add to PATH' during installation!" -ForegroundColor Yellow
-        pause
-        exit 1
+    # Find Python again after install
+    Start-Sleep -Seconds 2
+    $pythonExe = Find-Python
+
+    if (-not $pythonExe) {
+        Write-Host "  [!] Python not in PATH yet. Searching..." -ForegroundColor Yellow
+        $pythonExe = "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe"
+        if (-not (Test-Path $pythonExe)) {
+            Write-Host "  [ERROR] Could not find Python after installation" -ForegroundColor Red
+            Write-Host "  Please restart PowerShell and run this command again." -ForegroundColor Yellow
+            Write-Host ""
+            pause
+            exit 1
+        }
     }
+    Write-Host "  [OK] Python installed: $pythonExe" -ForegroundColor Green
 }
 
 Write-Host "  [OK] Python ready" -ForegroundColor Green
@@ -55,13 +95,20 @@ try {
     exit 1
 }
 
+# Find pythonw.exe
+$pythonwExe = Find-Pythonw
+if (-not $pythonwExe) {
+    # Fallback: use python.exe instead
+    $pythonwExe = $pythonExe
+}
+
 # Create desktop shortcut
 Write-Host "  [*] Creating shortcut..." -ForegroundColor Cyan
 try {
     $desktop = [Environment]::GetFolderPath("Desktop")
     $WshShell = New-Object -ComObject WScript.Shell
     $Shortcut = $WshShell.CreateShortcut("$desktop\OPSI PackForge.lnk")
-    $Shortcut.TargetPath = "pythonw.exe"
+    $Shortcut.TargetPath = $pythonwExe
     $Shortcut.Arguments = "`"$appScript`""
     $Shortcut.WorkingDirectory = $installDir
     $Shortcut.Description = "OPSI PackForge"
@@ -77,4 +124,4 @@ Write-Host "  Starting OPSI PackForge..." -ForegroundColor Cyan
 Write-Host ""
 
 # Launch the app
-Start-Process pythonw.exe -ArgumentList "`"$appScript`""
+Start-Process $pythonwExe -ArgumentList "`"$appScript`""
