@@ -448,10 +448,10 @@ class OPSIToolbox(tk.Tk):
         self.overwrite_var = tk.StringVar(value="Overwrite")
         overwrite_menu = tk.OptionMenu(deploy_inner, self.overwrite_var,
                                        "Overwrite", "New version", "Abort")
-        overwrite_menu.config(bg=INPUT_BG, fg=TEXT, font=(FONT, 10),
+        overwrite_menu.config(bg=CARD, fg=TEXT, font=(FONT, 10),
                              activebackground=ACCENT, activeforeground=BG,
                              highlightthickness=0, bd=0, relief="flat")
-        overwrite_menu["menu"].config(bg=INPUT_BG, fg=TEXT, font=(FONT, 10),
+        overwrite_menu["menu"].config(bg=CARD, fg=TEXT, font=(FONT, 10),
                                       activebackground=ACCENT, activeforeground=BG)
         overwrite_menu.pack(fill="x")
 
