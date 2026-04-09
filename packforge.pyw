@@ -100,6 +100,8 @@ class ModernButton(tk.Canvas):
         self.create_rounded_rect(2, 2, self.width-2, self.height-2, r, fill=bg, outline="")
         self.create_text(self.width//2, self.height//2, text=self.text,
                         fill=self.fg_color, font=(FONT, 10, "bold"))
+        # Bind click to all canvas items so clicks on text/rect also work
+        self.tag_bind("all", "<Button-1>", lambda _: self._click())
 
     def create_rounded_rect(self, x1, y1, x2, y2, r, **kwargs):
         points = [
@@ -754,9 +756,9 @@ class OPSIPackForge(tk.Tk):
         commands = [
             ("server", "systemctl is-active opsiconfd 2>/dev/null"),
             ("packages", "opsi-package-manager -l 2>/dev/null | wc -l"),
-            ("clients", """opsi-admin -d -S method hostControlSafe_reachable '["*"]' 2>/dev/null || echo '{}'"""),
+            ("clients", """opsi-cli --output-format json jsonrpc execute host_getObjects '[]' '{"type":"OpsiClient"}' 2>/dev/null | python3 -c "import sys,json;d=json.load(sys.stdin);print(len(d))" 2>/dev/null || opsi-admin -d method host_getObjects '[]' '{"type":"OpsiClient"}' 2>/dev/null | python3 -c "import sys,json;d=json.load(sys.stdin);print(len(d))" 2>/dev/null || echo 0"""),
             ("disk", "df /var/lib/opsi --output=pcent,avail 2>/dev/null | tail -1"),
-            ("failed", """opsi-admin -d -S method productOnClient_getObjects '[]' '{"actionResult":"failed"}' 2>/dev/null || echo '[]'"""),
+            ("failed", """opsi-cli --output-format json jsonrpc execute productOnClient_getObjects '[]' '{"actionResult":"failed"}' 2>/dev/null | python3 -c "import sys,json;d=json.load(sys.stdin);print(len(d))" 2>/dev/null || echo 0"""),
         ]
 
         def do_refresh():
@@ -802,18 +804,15 @@ class OPSIPackForge(tk.Tk):
         else:
             self.dash_cards["packages"]["value"].configure(text="?", fg=WARNING)
 
-        # Clients online
+        # Clients count
         out, err, rc = results.get("clients", ("", "", -1))
         if out:
             try:
-                data = json.loads(out)
-                total = len(data)
-                online = sum(1 for v in data.values() if v is True)
-                self.dash_cards["clients"]["value"].configure(
-                    text=f"{online}/{total}", fg=SUCCESS if online > 0 else TEXT)
-                self.dash_cards["clients"]["status"].configure(text="reachable")
-                self._log_to(self.dash_log, f"[OK] {online}/{total} clients online", "ok")
-            except (json.JSONDecodeError, AttributeError):
+                total = int(out.strip())
+                self.dash_cards["clients"]["value"].configure(text=str(total), fg=TEXT)
+                self.dash_cards["clients"]["status"].configure(text="registered")
+                self._log_to(self.dash_log, f"[OK] {total} clients registered", "ok")
+            except ValueError:
                 self.dash_cards["clients"]["value"].configure(text="?", fg=WARNING)
         else:
             self.dash_cards["clients"]["value"].configure(text="?", fg=WARNING)
@@ -837,17 +836,16 @@ class OPSIPackForge(tk.Tk):
 
         # Failed deployments
         out, err, rc = results.get("failed", ("", "", -1))
-        if out:
+        if out is not None:
             try:
-                data = json.loads(out) if out else []
-                count = len(data)
+                count = int(out.strip()) if out.strip() else 0
                 color = SUCCESS if count == 0 else ERROR
                 self.dash_cards["failed"]["value"].configure(text=str(count), fg=color)
                 self.dash_cards["failed"]["status"].configure(
                     text="all good" if count == 0 else "need attention")
                 tag = "ok" if count == 0 else "error"
                 self._log_to(self.dash_log, f"[{'OK' if count == 0 else 'WARN'}] {count} failed deployments", tag)
-            except json.JSONDecodeError:
+            except ValueError:
                 self.dash_cards["failed"]["value"].configure(text="?", fg=WARNING)
         else:
             self.dash_cards["failed"]["value"].configure(text="?", fg=WARNING)
@@ -1927,9 +1925,9 @@ Message "Uninstalling {data['name']}..."
         loading.pack(pady=20)
 
         def fetch():
-            # Get all clients
+            # Get all clients via opsi-cli (proper JSON output)
             out, err, rc = self._ssh_cmd(
-                """opsi-admin -d -S method host_getObjects '[]' '{"type":"OpsiClient"}' 2>/dev/null""",
+                """opsi-cli --output-format json jsonrpc execute host_getObjects '[]' '{"type":"OpsiClient"}' 2>/dev/null""",
                 timeout=30
             )
             clients = []
@@ -1939,16 +1937,16 @@ Message "Uninstalling {data['name']}..."
                     for c in data:
                         clients.append({
                             "id": c.get("id", ""),
-                            "ip": c.get("ipAddress", ""),
-                            "mac": c.get("hardwareAddress", ""),
+                            "ip": c.get("ipAddress", "") or "",
+                            "mac": c.get("hardwareAddress", "") or "",
                         })
                 except json.JSONDecodeError:
                     pass
 
             # Get reachability
             reach_out, _, _ = self._ssh_cmd(
-                """opsi-admin -d -S method hostControlSafe_reachable '["*"]' 2>/dev/null""",
-                timeout=30
+                """opsi-cli --output-format json jsonrpc execute hostControlSafe_reachable '["*"]' 2>/dev/null""",
+                timeout=60
             )
             reachable = {}
             if reach_out:
@@ -1959,7 +1957,7 @@ Message "Uninstalling {data['name']}..."
 
             # Also refresh groups
             grp_out, _, _ = self._ssh_cmd(
-                """opsi-admin -d -S method group_getObjects '[]' '{"type":"HostGroup"}' 2>/dev/null""",
+                """opsi-cli --output-format json jsonrpc execute group_getObjects '[]' '{"type":"HostGroup"}' 2>/dev/null""",
                 timeout=15
             )
             groups = []
@@ -2041,7 +2039,7 @@ Message "Uninstalling {data['name']}..."
     def _wol_wake_all(self):
         self._wol_log("Waking ALL clients via OPSI...", "info")
         self._ssh_bg(
-            """opsi-admin -d method hostControlSafe_start '["*"]'""",
+            """opsi-cli jsonrpc execute hostControlSafe_start '["*"]'""",
             lambda out, err, rc: self._wol_log(
                 "[OK] Wake-all command sent" if rc == 0 else f"[ERROR] {err}", "ok" if rc == 0 else "error"
             )
@@ -2057,7 +2055,7 @@ Message "Uninstalling {data['name']}..."
         def do_wake():
             # Get group members
             out, err, rc = self._ssh_cmd(
-                f"""opsi-admin -d -S method objectToGroup_getObjects '[]' '{{"groupType":"HostGroup","groupId":"{group}"}}' """,
+                f"""opsi-cli --output-format json jsonrpc execute objectToGroup_getObjects '[]' '{{"groupType":"HostGroup","groupId":"{group}"}}' 2>/dev/null""",
                 timeout=15
             )
             if rc != 0:
@@ -2072,7 +2070,7 @@ Message "Uninstalling {data['name']}..."
 
                 ids_json = json.dumps(client_ids)
                 out2, err2, rc2 = self._ssh_cmd(
-                    f"""opsi-admin -d method hostControlSafe_start '{ids_json}'""",
+                    f"""opsi-cli jsonrpc execute hostControlSafe_start '{ids_json}'""",
                     timeout=30
                 )
                 count = len(client_ids)
@@ -2093,7 +2091,7 @@ Message "Uninstalling {data['name']}..."
         self._wol_log(f"Waking {len(selected)} selected client(s)...", "info")
         ids_json = json.dumps(selected)
         self._ssh_bg(
-            f"""opsi-admin -d method hostControlSafe_start '{ids_json}'""",
+            f"""opsi-cli jsonrpc execute hostControlSafe_start '{ids_json}'""",
             lambda out, err, rc: self._wol_log(
                 f"[OK] Wake sent to {len(selected)} client(s)" if rc == 0 else f"[ERROR] {err}",
                 "ok" if rc == 0 else "error"
@@ -2120,7 +2118,7 @@ Message "Uninstalling {data['name']}..."
         self._wol_log(f"Rebooting {len(selected)} client(s)...", "info")
         ids_json = json.dumps(selected)
         self._ssh_bg(
-            f"""opsi-admin -d method hostControlSafe_reboot '{ids_json}'""",
+            f"""opsi-cli jsonrpc execute hostControlSafe_reboot '{ids_json}'""",
             lambda out, err, rc: self._wol_log(
                 f"[OK] Reboot sent" if rc == 0 else f"[ERROR] {err}",
                 "ok" if rc == 0 else "error"
@@ -2137,7 +2135,7 @@ Message "Uninstalling {data['name']}..."
         self._wol_log(f"Shutting down {len(selected)} client(s)...", "info")
         ids_json = json.dumps(selected)
         self._ssh_bg(
-            f"""opsi-admin -d method hostControlSafe_shutdown '{ids_json}'""",
+            f"""opsi-cli jsonrpc execute hostControlSafe_shutdown '{ids_json}'""",
             lambda out, err, rc: self._wol_log(
                 f"[OK] Shutdown sent" if rc == 0 else f"[ERROR] {err}",
                 "ok" if rc == 0 else "error"
@@ -2237,7 +2235,7 @@ Message "Uninstalling {data['name']}..."
             else:
                 self._log_to(self.health_output, "\nHealth check failed or not available", "error")
 
-        self._ssh_bg("opsi-cli support health-check 2>&1 || opsiconfd diagnostic 2>&1", on_done, timeout=60)
+        self._ssh_bg("opsi-cli --no-color support health-check 2>&1 || opsi-cli support health-check 2>&1 | sed 's/\\x1b\\[[0-9;]*m//g' || opsiconfd diagnostic 2>&1", on_done, timeout=60)
 
         # Run quick checks in parallel
         self._run_quick_health_checks()
@@ -2327,7 +2325,7 @@ Message "Uninstalling {data['name']}..."
         def do_check():
             # Product status
             out, err, rc = self._ssh_cmd(
-                f"""opsi-admin -d -S method productOnClient_getObjects '["productId","installationStatus","actionResult","actionRequest"]' '{{"clientId":"{client}"}}' """,
+                f"""opsi-cli --output-format json jsonrpc execute productOnClient_getObjects '["productId","installationStatus","actionResult","actionRequest"]' '{{"clientId":"{client}"}}' """,
                 timeout=30
             )
             if rc == 0 and out:
@@ -2353,7 +2351,7 @@ Message "Uninstalling {data['name']}..."
 
             # Last seen
             out2, _, rc2 = self._ssh_cmd(
-                f"""opsi-admin -d -S method host_getObjects '["id","lastSeen"]' '{{"id":"{client}"}}' """,
+                f"""opsi-cli --output-format json jsonrpc execute host_getObjects '["id","lastSeen"]' '{{"id":"{client}"}}' """,
                 timeout=15
             )
             if rc2 == 0 and out2:
@@ -2389,7 +2387,7 @@ Message "Uninstalling {data['name']}..."
                 self._log_to(self.client_output, f"Error: {err}", "error")
 
         self._ssh_bg(
-            """opsi-admin -d -S method productOnClient_getObjects '["clientId","productId"]' '{"actionResult":"failed"}' 2>/dev/null""",
+            """opsi-cli --output-format json jsonrpc execute productOnClient_getObjects '["clientId","productId"]' '{"actionResult":"failed"}' 2>/dev/null""",
             on_done, timeout=30
         )
 
