@@ -768,6 +768,7 @@ class OPSIPackForge(tk.Tk):
         threading.Thread(target=do_refresh, daemon=True).start()
 
     def _apply_dashboard_results(self, results):
+        self.dash_log.delete("1.0", tk.END)
         # Server status
         out, err, rc = results.get("server", ("", "", -1))
         if rc == 0 and "active" in out:
@@ -1925,15 +1926,18 @@ Message "Uninstalling {data['name']}..."
         loading.pack(pady=20)
 
         def fetch():
-            # Get all clients via opsi-cli (proper JSON output)
-            out, err, rc = self._ssh_cmd(
-                """opsi-cli --output-format json jsonrpc execute host_getObjects '[]' '{"type":"OpsiClient"}' 2>/dev/null""",
-                timeout=30
-            )
+            # Single SSH session: get clients and groups
+            commands = [
+                ("clients", """opsi-cli --output-format json jsonrpc execute host_getObjects '[]' '{"type":"OpsiClient"}' 2>/dev/null"""),
+                ("groups", """opsi-cli --output-format json jsonrpc execute group_getObjects '[]' '{"type":"HostGroup"}' 2>/dev/null"""),
+            ]
+            results = self._ssh_multi(commands, timeout=60)
+
             clients = []
-            if rc == 0 and out:
+            cout, cerr, crc = results.get("clients", ("", "", -1))
+            if cout:
                 try:
-                    data = json.loads(out)
+                    data = json.loads(cout)
                     for c in data:
                         clients.append({
                             "id": c.get("id", ""),
@@ -1941,34 +1945,37 @@ Message "Uninstalling {data['name']}..."
                             "mac": c.get("hardwareAddress", "") or "",
                         })
                 except json.JSONDecodeError:
-                    pass
+                    self.after(0, lambda e=cout[:200]: self._wol_log(f"JSON parse error: {e}", "error"))
 
-            # Get reachability
-            reach_out, _, _ = self._ssh_cmd(
-                """opsi-cli --output-format json jsonrpc execute hostControlSafe_reachable '["*"]' 2>/dev/null""",
-                timeout=60
-            )
-            reachable = {}
-            if reach_out:
-                try:
-                    reachable = json.loads(reach_out)
-                except json.JSONDecodeError:
-                    pass
-
-            # Also refresh groups
-            grp_out, _, _ = self._ssh_cmd(
-                """opsi-cli --output-format json jsonrpc execute group_getObjects '[]' '{"type":"HostGroup"}' 2>/dev/null""",
-                timeout=15
-            )
             groups = []
-            if grp_out:
+            gout, _, _ = results.get("groups", ("", "", -1))
+            if gout:
                 try:
-                    grp_data = json.loads(grp_out)
+                    grp_data = json.loads(gout)
                     groups = [g.get("id", "") for g in grp_data if g.get("id")]
                 except json.JSONDecodeError:
                     pass
 
-            self.after(0, lambda: self._populate_wol_clients(clients, reachable, groups))
+            if not clients:
+                self.after(0, lambda: self._wol_log(f"No clients found. RC={crc}, err={cerr[:100]}", "error"))
+
+            # Reachability check separately (can be slow, do after showing clients)
+            self.after(0, lambda: self._populate_wol_clients(clients, {}, groups))
+
+            # Now fetch reachability in background
+            if clients:
+                reach_out, _, _ = self._ssh_cmd(
+                    """opsi-cli --output-format json jsonrpc execute hostControlSafe_reachable '["*"]' 2>/dev/null""",
+                    timeout=120
+                )
+                reachable = {}
+                if reach_out:
+                    try:
+                        reachable = json.loads(reach_out)
+                    except json.JSONDecodeError:
+                        pass
+                if reachable:
+                    self.after(0, lambda r=reachable: self._update_wol_status(r))
 
         threading.Thread(target=fetch, daemon=True).start()
 
@@ -1983,6 +1990,7 @@ Message "Uninstalling {data['name']}..."
                     font=(FONT, 10), bg=BG_SECONDARY, fg=TEXT_MUTED).pack(pady=20)
             return
 
+        self.wol_status_labels = {}
         for client in clients:
             cid = client["id"]
             is_online = reachable.get(cid, False) is True
@@ -2003,10 +2011,12 @@ Message "Uninstalling {data['name']}..."
             tk.Label(row, text=client["mac"] or "-", font=(FONT_MONO, 9), bg=BG_SECONDARY,
                     fg=TEXT_SECONDARY, width=18, anchor="w").pack(side="left")
 
-            status_text = "Online" if is_online else "Offline"
-            status_color = SUCCESS if is_online else ERROR
-            tk.Label(row, text=status_text, font=(FONT, 9, "bold"), bg=BG_SECONDARY,
-                    fg=status_color, width=8, anchor="w").pack(side="left")
+            status_text = "Online" if is_online else "--"
+            status_color = SUCCESS if is_online else TEXT_MUTED
+            status_lbl = tk.Label(row, text=status_text, font=(FONT, 9, "bold"), bg=BG_SECONDARY,
+                    fg=status_color, width=8, anchor="w")
+            status_lbl.pack(side="left")
+            self.wol_status_labels[cid] = status_lbl
 
         # Update group dropdown
         menu = self.wol_group_menu["menu"]
@@ -2016,7 +2026,19 @@ Message "Uninstalling {data['name']}..."
         if groups:
             self.wol_group_var.set(groups[0])
 
-        self._wol_log(f"Loaded {len(clients)} clients, {sum(1 for v in reachable.values() if v is True)} online", "ok")
+        self._wol_log(f"Loaded {len(clients)} clients. Checking reachability...", "ok")
+
+    def _update_wol_status(self, reachable):
+        """Update client status labels after reachability check."""
+        online = 0
+        for cid, lbl in self.wol_status_labels.items():
+            is_online = reachable.get(cid, False) is True
+            if is_online:
+                lbl.configure(text="Online", fg=SUCCESS)
+                online += 1
+            else:
+                lbl.configure(text="Offline", fg=ERROR)
+        self._wol_log(f"Status updated: {online}/{len(self.wol_status_labels)} online", "ok")
 
     def _toggle_select_all_wol(self):
         val = self.wol_select_all.get()
