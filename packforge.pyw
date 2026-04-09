@@ -114,7 +114,10 @@ class ModernButton(tk.Canvas):
 
     def _click(self):
         if self.command:
+            self._draw(ACCENT)
+            self.update_idletasks()
             self.command()
+            self.after(150, lambda: self._draw(self.bg_normal))
 
 
 class SidebarButton(tk.Frame):
@@ -436,7 +439,7 @@ class OPSIPackForge(tk.Tk):
                     **hide_kwargs
                 )
 
-            return result.stdout.strip(), result.stderr.strip(), result.returncode
+            return (result.stdout or "").strip(), (result.stderr or "").strip(), result.returncode
         except subprocess.TimeoutExpired:
             return "", "Timeout", -1
         except Exception as e:
@@ -485,7 +488,7 @@ class OPSIPackForge(tk.Tk):
                     capture_output=True, text=True, timeout=timeout,
                     **self._subprocess_kwargs(hide=True)
                 )
-            return result.stdout.strip(), result.stderr.strip(), result.returncode
+            return (result.stdout or "").strip(), (result.stderr or "").strip(), result.returncode
         except subprocess.TimeoutExpired:
             return "", "Timeout", -1
         except Exception as e:
@@ -705,7 +708,7 @@ class OPSIPackForge(tk.Tk):
         card_defs = [
             ("server", "Server Status", "--", ACCENT),
             ("packages", "Packages", "--", ACCENT),
-            ("clients", "Clients Online", "--", ACCENT),
+            ("clients", "Clients", "--", ACCENT),
             ("disk", "Disk Space", "--", ACCENT),
             ("failed", "Failed Deploys", "--", ACCENT),
         ]
@@ -750,9 +753,6 @@ class OPSIPackForge(tk.Tk):
                     command=lambda: self._show_page("packaging"),
                     width=110).pack(side="left", padx=(0, 8))
         ModernButton(btn_row, text="Wake on LAN",
-                    command=lambda: self._show_page("wakeonlan"),
-                    width=110).pack(side="left", padx=(0, 8))
-        ModernButton(btn_row, text="View Clients",
                     command=lambda: self._show_page("wakeonlan"),
                     width=110).pack(side="left")
 
@@ -1195,7 +1195,7 @@ class OPSIPackForge(tk.Tk):
         # Select all checkbox
         sa_frame = tk.Frame(client_card, bg=CARD)
         sa_frame.pack(fill="x", padx=20)
-        self.wol_select_all = tk.BooleanVar(value=False)
+        self.wol_select_all = tk.IntVar(value=0)
         tk.Checkbutton(sa_frame, text="Select All", variable=self.wol_select_all,
                       bg=CARD, fg=TEXT_SECONDARY, selectcolor=BG_SECONDARY,
                       activebackground=CARD, font=(FONT, 9),
@@ -1889,8 +1889,9 @@ Message "Uninstalling {data['name']}..."
         msg = f"Remove {len(product_ids)} package(s)?"
         if purge:
             msg += "\n(PURGE mode: client states will also be removed)"
-        if not messagebox.askyesno("Confirm Removal", msg):
+        if not messagebox.askyesno("Confirm Removal", msg, parent=self):
             return
+        self.focus_force()
 
         self.pkg_log.delete("1.0", tk.END)
         self._pkg_log(f"Removing {len(product_ids)} package(s)...", "info")
@@ -2023,11 +2024,12 @@ Message "Uninstalling {data['name']}..."
             row = tk.Frame(self.wol_client_frame, bg=BG_SECONDARY)
             row.pack(fill="x", pady=1)
 
-            var = tk.BooleanVar(value=False)
+            var = tk.IntVar(value=0)
             self.wol_client_vars[cid] = var
             tk.Checkbutton(row, variable=var, bg=BG_SECONDARY,
                           selectcolor=CARD, highlightthickness=0,
-                          activebackground=BG_SECONDARY).pack(side="left")
+                          activebackground=BG_SECONDARY,
+                          onvalue=1, offvalue=0).pack(side="left")
 
             tk.Label(row, text=cid, font=(FONT, 9), bg=BG_SECONDARY,
                     fg=TEXT, width=25, anchor="w").pack(side="left")
@@ -2066,7 +2068,7 @@ Message "Uninstalling {data['name']}..."
         self._wol_log(f"Status updated: {online}/{len(self.wol_status_labels)} online", "ok")
 
     def _toggle_select_all_wol(self):
-        val = self.wol_select_all.get()
+        val = 1 if self.wol_select_all.get() else 0
         for var in self.wol_client_vars.values():
             var.set(val)
 
@@ -2294,31 +2296,30 @@ Message "Uninstalling {data['name']}..."
             self._show_diag_tab("health")
 
         def on_done(out, err, rc):
-            # Try to parse JSON output first
-            data = self._parse_json(out) if out else None
-            if data and isinstance(data, (list, dict)):
-                items = data if isinstance(data, list) else data.values() if isinstance(data, dict) else []
-                for item in items:
-                    if isinstance(item, dict):
-                        check_id = item.get("check_id", item.get("id", ""))
-                        status = item.get("check_status", item.get("status", ""))
-                        msg = item.get("message", item.get("description", ""))
-                        tag = "ok" if status in ("ok", "passed", "success") else ("warn" if status == "warning" else "error")
-                        self._log_to(self.health_output, f"[{status.upper()}] {check_id}: {msg}", tag)
-                    elif isinstance(item, str):
-                        self._log_to(self.health_output, item, "")
-                self._log_to(self.health_output, "\nHealth check complete", "ok")
-            elif out:
-                # Strip any remaining ANSI codes in Python
-                import re as _re
-                clean = _re.sub(r'\x1b\[[0-9;]*[a-zA-Z]', '', out)
-                clean = _re.sub(r'\x1b\[', '', clean)
-                self._log_to(self.health_output, clean, "")
-                self._log_to(self.health_output, "\nHealth check complete", "ok")
-            else:
-                self._log_to(self.health_output, f"Health check failed: {err}", "error")
+            if not out and not err:
+                self._log_to(self.health_output, "Health check failed: no output", "error")
+                return
+            text = (out + "\n" + err).strip()
+            # Strip Rich markup tags like [red], [green], [/red], [bold], etc.
+            clean = re.sub(r'\[/?[a-zA-Z_]+\]', '', text)
+            # Strip ANSI escape codes
+            clean = re.sub(r'\x1b\[[0-9;]*[a-zA-Z]', '', clean)
+            # Parse each line and colorize based on content
+            for line in clean.split("\n"):
+                line = line.strip()
+                if not line:
+                    continue
+                if any(w in line.lower() for w in ["error", "fail", "critical"]):
+                    self._log_to(self.health_output, line, "error")
+                elif any(w in line.lower() for w in ["warn", "yellow"]):
+                    self._log_to(self.health_output, line, "warn")
+                elif any(w in line.lower() for w in ["ok", "green", "pass", "success"]):
+                    self._log_to(self.health_output, line, "ok")
+                else:
+                    self._log_to(self.health_output, line, "")
+            self._log_to(self.health_output, "\nHealth check complete", "ok")
 
-        self._ssh_bg("opsi-cli --output-format json support health-check 2>/dev/null || TERM=dumb opsi-cli support health-check 2>&1", on_done, timeout=60)
+        self._ssh_bg("TERM=dumb opsi-cli support health-check 2>&1", on_done, timeout=60)
 
         # Run quick checks in parallel
         self._run_quick_health_checks()
@@ -2481,13 +2482,24 @@ Message "Uninstalling {data['name']}..."
         self.client_output.delete("1.0", tk.END)
         self._log_to(self.client_output, f"Fetching recent logs for {client}...", "info")
 
+        # Search multiple log dirs, match by hostname prefix (user may not type FQDN)
+        log_cmd = (
+            f"found=0; "
+            f"for dir in /var/log/opsi/instlog /var/log/opsi/clientconnect /var/log/opsi/bootimage; do "
+            f"  for f in $(ls -t $dir/{client}* 2>/dev/null | head -1); do "
+            f"    echo '=== '$f' ==='; tail -80 $f 2>/dev/null; found=1; "
+            f"  done; "
+            f"done; "
+            f"[ $found -eq 0 ] && echo 'No log files found for {client} in /var/log/opsi/'"
+        )
+
         def on_done(out, err, rc):
             if out:
                 self._log_to(self.client_output, out, "")
             else:
-                self._log_to(self.client_output, f"No logs found or error: {err}", "warn")
+                self._log_to(self.client_output, f"No logs found: {err}", "warn")
 
-        self._ssh_bg(f"tail -100 /var/log/opsi/instlog/{client}.log 2>/dev/null || echo 'No install log found'", on_done)
+        self._ssh_bg(log_cmd, on_done)
 
     # paedML checks
     def _run_paedml_checks(self):
@@ -2513,26 +2525,26 @@ Message "Uninstalling {data['name']}..."
             ("cert_opsi", "openssl s_client -connect localhost:4447 </dev/null 2>/dev/null | openssl x509 -checkend 2592000 -noout 2>&1",
              lambda o, e, rc: (rc == 0, "Valid >30d" if rc == 0 else f"Expiring or error: {(o+e).strip()}")),
 
-            ("dns_forward", "dig @localhost $(hostname -d 2>/dev/null || echo localhost) SOA +short 2>&1 | head -3",
-             lambda o, e, rc: (bool(o.strip()) and "error" not in o.lower(), o.strip()[:80] if o.strip() else f"No result: {e}")),
+            ("dns_forward", "dig @localhost $(hostname -d 2>/dev/null || echo localhost) SOA +short 2>/dev/null | grep -v '^;' | grep -v '^$' | grep -v DiG | head -1",
+             lambda o, e, rc: (bool(o.strip()), o.strip()[:80] if o.strip() else "No DNS result")),
 
-            ("dns_reverse", "dig @localhost -x $(hostname -I 2>/dev/null | awk '{print $1}') +short 2>&1 | head -3",
-             lambda o, e, rc: (bool(o.strip()) and "error" not in o.lower(), o.strip()[:80] if o.strip() else f"No result: {e}")),
+            ("dns_reverse", "dig @localhost -x $(hostname -I 2>/dev/null | awk '{print $1}') +short 2>/dev/null | grep -v '^;' | grep -v '^$' | grep -v DiG | head -1",
+             lambda o, e, rc: (bool(o.strip()), o.strip()[:80] if o.strip() else "No reverse DNS result")),
 
             ("dhcp_config", "dhcpd -t -cf /etc/dhcp/dhcpd.conf 2>&1 | tail -3",
              lambda o, e, rc: (rc == 0, "Config OK" if rc == 0 else f"Error: {(o+e).strip()[:120]}")),
 
             ("samba_ad", "samba-tool domain level show 2>&1 | head -5",
-             lambda o, e, rc: (rc == 0 and "error" not in o.lower() and "fatal" not in o.lower(),
+             lambda o, e, rc: (rc == 0 and not any(w in o.lower() for w in ["error", "fatal", "could not open", "no such file"]),
                               (o+e).strip()[:120] if (o+e).strip() else "No output")),
 
-            ("domain_join", "net ads testjoin 2>&1",
-             lambda o, e, rc: ("ok" in (o+e).lower() and "error" not in (o+e).lower(),
-                              (o+e).strip()[:120])),
+            ("domain_join", "net ads testjoin 2>&1 | grep -v 'Keyboard-interactive' | grep -v 'authentication prompts' | head -1",
+             lambda o, e, rc: ("ok" in o.lower() and "join is ok" in o.lower(),
+                              o.strip()[:80] if o.strip() else f"Error: {e[:80]}")),
 
-            ("sophomorix", "sophomorix-check 2>&1 | tail -5",
-             lambda o, e, rc: (rc == 0 and "error" not in o.lower() and "fatal" not in o.lower(),
-                              (o+e).strip()[:120] if rc != 0 or "error" in o.lower() else "OK")),
+            ("sophomorix", "sophomorix-check 2>&1 | grep -v 'Keyboard-interactive' | grep -v 'authentication prompts' | tail -5",
+             lambda o, e, rc: (rc == 0 and not any(w in o.lower() for w in ["error", "fatal"]),
+                              (o+e).strip()[:120] if rc != 0 or any(w in o.lower() for w in ["error", "fatal"]) else "OK")),
         ]
 
         for key, cmd, evaluator in checks:
