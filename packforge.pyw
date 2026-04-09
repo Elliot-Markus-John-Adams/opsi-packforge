@@ -317,8 +317,6 @@ class OPSIToolbox(tk.Tk):
             btn.set_active(False)
         self.pages[page_name].pack(fill="both", expand=True)
         self.nav_buttons[page_name].set_active(True)
-        if page_name == "dashboard":
-            self._refresh_dashboard()
 
     # ══════════════════════════════════════════════════════════════════════════
     # HELPERS
@@ -330,6 +328,17 @@ class OPSIToolbox(tk.Tk):
     def _get_user(self):
         return self.global_user.get_value() or "root"
 
+    def _subprocess_kwargs(self):
+        """Return extra kwargs to hide console windows on Windows."""
+        kwargs = {}
+        if os.name == "nt":
+            si = subprocess.STARTUPINFO()
+            si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            si.wShowWindow = 0  # SW_HIDE
+            kwargs["startupinfo"] = si
+            kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+        return kwargs
+
     def _ssh_cmd(self, cmd, timeout=30):
         """Run a command on the OPSI server via SSH. Returns (stdout, stderr, returncode)."""
         server = self._get_server()
@@ -338,7 +347,8 @@ class OPSIToolbox(tk.Tk):
             result = subprocess.run(
                 ["ssh", "-o", "ConnectTimeout=5", "-o", "StrictHostKeyChecking=no",
                  f"{user}@{server}", cmd],
-                capture_output=True, text=True, timeout=timeout
+                capture_output=True, text=True, timeout=timeout,
+                **self._subprocess_kwargs()
             )
             return result.stdout.strip(), result.stderr.strip(), result.returncode
         except subprocess.TimeoutExpired:
@@ -1450,7 +1460,8 @@ Message "Uninstalling {data['name']}..."
             try:
                 result = subprocess.run(
                     ["scp", "-r", pkg_path, f"{user}@{server}:/var/lib/opsi/workbench/"],
-                    capture_output=True, text=True
+                    capture_output=True, text=True,
+                    **self._subprocess_kwargs()
                 )
                 if result.returncode != 0:
                     raise Exception(f"SCP failed: {result.stderr}")
@@ -1537,7 +1548,8 @@ Message "Uninstalling {data['name']}..."
             try:
                 result = subprocess.run(
                     ["scp", opsi_file, f"{user}@{server}:{remote_path}"],
-                    capture_output=True, text=True
+                    capture_output=True, text=True,
+                    **self._subprocess_kwargs()
                 )
                 if result.returncode != 0:
                     raise Exception(f"SCP failed: {result.stderr}")
@@ -1888,7 +1900,8 @@ Message "Uninstalling {data['name']}..."
                 param = "-n" if os.name == "nt" else "-c"
                 result = subprocess.run(
                     ["ping", param, "4", host],
-                    capture_output=True, text=True, timeout=15
+                    capture_output=True, text=True, timeout=15,
+                    **self._subprocess_kwargs()
                 )
                 self.after(0, lambda: self._diag_log(result.stdout or ""))
                 if result.returncode == 0:
@@ -1914,7 +1927,8 @@ Message "Uninstalling {data['name']}..."
                 result = subprocess.run(
                     ["ssh", "-o", "ConnectTimeout=5", "-o", "StrictHostKeyChecking=no",
                      f"root@{host}", "echo 'SSH OK'"],
-                    capture_output=True, text=True, timeout=10
+                    capture_output=True, text=True, timeout=10,
+                    **self._subprocess_kwargs()
                 )
                 if result.returncode == 0:
                     self.after(0, lambda: self._diag_log("SSH connection successful", "ok"))
