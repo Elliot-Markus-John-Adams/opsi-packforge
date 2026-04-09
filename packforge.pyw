@@ -1758,9 +1758,9 @@ Message "Uninstalling {data['name']}..."
                 overwrite_choice = self.overwrite_var.get()
                 wb = "/var/lib/opsi/workbench"
                 if overwrite_choice == "Overwrite":
-                    # Remove old .opsi file first, then build fresh
-                    self._ssh_cmd(f"rm -f {wb}/{data['id']}_{data['version']}-*.opsi 2>/dev/null")
-                    makepackage_cmd = f"cd {wb} && opsi-makepackage {pkg_folder} 2>&1 | cat"
+                    # --keep-versions sets doNotUseTerminal=True in opsi-makepackage source,
+                    # which skips the interactive prompt entirely
+                    makepackage_cmd = f"cd {wb} && opsi-makepackage --keep-versions {pkg_folder} 2>&1"
                 elif overwrite_choice == "New version":
                     find_cmd = f"ls {wb}/{data['id']}_{data['version']}-*.opsi 2>/dev/null | sort -V | tail -1"
                     find_out, _, _ = self._ssh_cmd(find_cmd)
@@ -1771,13 +1771,14 @@ Message "Uninstalling {data['name']}..."
                             release = int(existing) + 1
                         except (ValueError, IndexError):
                             pass
-                    makepackage_cmd = f"cd {wb} && opsi-makepackage --product-version {data['version']} --package-version {release} {pkg_folder} 2>&1 | cat"
+                    # Both --product-version and --package-version together set doNotUseTerminal=True
+                    makepackage_cmd = f"cd {wb} && opsi-makepackage --product-version {data['version']} --package-version {release} {pkg_folder} 2>&1"
                 else:
                     check_out, _, _ = self._ssh_cmd(f"ls {wb}/{pkg_folder}-*.opsi 2>/dev/null")
                     if check_out:
                         self.after(0, lambda: self._pkg_log("[ABORTED] Package already exists on server", "warn"))
                         return
-                    makepackage_cmd = f"cd {wb} && opsi-makepackage {pkg_folder} 2>&1 | cat"
+                    makepackage_cmd = f"cd {wb} && opsi-makepackage {pkg_folder} 2>&1"
 
                 self.after(0, lambda: self._pkg_log("Building .opsi package...", "info"))
                 out, err, rc = self._ssh_cmd(makepackage_cmd, timeout=120)
