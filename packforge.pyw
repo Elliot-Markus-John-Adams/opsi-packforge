@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-OPSI Toolbox v3.0 - Modern Admin Suite
+OPSI PackForge v3.0 - Modern Admin Suite
 Full-featured OPSI administration with packaging, WOL, and diagnostics
 """
 
@@ -211,7 +211,7 @@ class TabButton(tk.Canvas):
 # MAIN APPLICATION
 # ══════════════════════════════════════════════════════════════════════════════
 
-class OPSIToolbox(tk.Tk):
+class OPSIPackForge(tk.Tk):
 
     INSTALLER_TYPES = {
         "msi": {"name": "MSI", "params": "/qn /norestart"},
@@ -224,7 +224,7 @@ class OPSIToolbox(tk.Tk):
 
     def __init__(self):
         super().__init__()
-        self.title("OPSI Toolbox")
+        self.title("OPSI PackForge")
         self.geometry("1200x800")
         self.configure(bg=BG)
         self.minsize(1000, 650)
@@ -259,7 +259,7 @@ class OPSIToolbox(tk.Tk):
         logo_frame.pack(fill="x", pady=20, padx=16)
         tk.Label(logo_frame, text="OPSI", font=(FONT, 20, "bold"),
                 bg=SIDEBAR, fg=ACCENT).pack(side="left")
-        tk.Label(logo_frame, text="Toolbox", font=(FONT, 20),
+        tk.Label(logo_frame, text="PackForge", font=(FONT, 20),
                 bg=SIDEBAR, fg=TEXT).pack(side="left", padx=(4, 0))
 
         tk.Frame(self.sidebar, bg=BORDER, height=1).pack(fill="x", padx=16)
@@ -276,7 +276,21 @@ class OPSIToolbox(tk.Tk):
         tk.Label(settings_frame, text="SSH User", font=(FONT, 9),
                 bg=SIDEBAR, fg=TEXT_MUTED).pack(anchor="w")
         self.global_user = ModernEntry(settings_frame, placeholder="root", width=18)
-        self.global_user.pack(fill="x", pady=(2, 0))
+        self.global_user.pack(fill="x", pady=(2, 8))
+
+        tk.Label(settings_frame, text="Password (optional)", font=(FONT, 9),
+                bg=SIDEBAR, fg=TEXT_MUTED).pack(anchor="w")
+        self.global_password = tk.Entry(settings_frame, show="*",
+                                        bg=CARD, fg=TEXT, insertbackground=ACCENT,
+                                        relief="flat", highlightthickness=1,
+                                        highlightbackground=BORDER, highlightcolor=ACCENT,
+                                        font=(FONT, 11), width=18)
+        self.global_password.pack(fill="x", pady=(2, 0))
+
+        # Connection status
+        self.conn_status = tk.Label(settings_frame, text="", font=(FONT, 8),
+                                    bg=SIDEBAR, fg=TEXT_MUTED)
+        self.conn_status.pack(anchor="w", pady=(4, 0))
 
         tk.Frame(self.sidebar, bg=BORDER, height=1).pack(fill="x", padx=16, pady=(16, 0))
 
@@ -328,6 +342,15 @@ class OPSIToolbox(tk.Tk):
     def _get_user(self):
         return self.global_user.get_value() or "root"
 
+    def _get_password(self):
+        return self.global_password.get()
+
+    def _has_plink(self):
+        """Check if plink.exe is available."""
+        if not hasattr(self, "_plink_cache"):
+            self._plink_cache = shutil.which("plink") is not None
+        return self._plink_cache
+
     def _subprocess_kwargs(self):
         """Return extra kwargs to hide console windows on Windows."""
         kwargs = {}
@@ -343,11 +366,47 @@ class OPSIToolbox(tk.Tk):
         """Run a command on the OPSI server via SSH. Returns (stdout, stderr, returncode)."""
         server = self._get_server()
         user = self._get_user()
+        password = self._get_password()
+
         try:
+            if password and self._has_plink():
+                # Use plink with password (no console window, no TTY needed)
+                args = ["plink", "-ssh", "-batch", "-pw", password,
+                        f"{user}@{server}", cmd]
+            elif password and os.name == "nt":
+                # Fallback: OpenSSH with password via stdin (may not work on all Windows)
+                args = ["ssh", "-o", "ConnectTimeout=5", "-o", "StrictHostKeyChecking=no",
+                        f"{user}@{server}", cmd]
+            else:
+                # Key-based auth (BatchMode prevents password popups)
+                args = ["ssh", "-o", "ConnectTimeout=5", "-o", "StrictHostKeyChecking=no",
+                        "-o", "BatchMode=yes", f"{user}@{server}", cmd]
+
             result = subprocess.run(
-                ["ssh", "-o", "ConnectTimeout=5", "-o", "StrictHostKeyChecking=no",
-                 "-o", "BatchMode=yes", f"{user}@{server}", cmd],
-                capture_output=True, text=True, timeout=timeout,
+                args, capture_output=True, text=True, timeout=timeout,
+                **self._subprocess_kwargs()
+            )
+            return result.stdout.strip(), result.stderr.strip(), result.returncode
+        except subprocess.TimeoutExpired:
+            return "", "Timeout", -1
+        except Exception as e:
+            return "", str(e), -1
+
+    def _scp_cmd(self, local_path, remote_path, timeout=120):
+        """Copy files to server. Returns (stdout, stderr, returncode)."""
+        server = self._get_server()
+        user = self._get_user()
+        password = self._get_password()
+        dest = f"{user}@{server}:{remote_path}"
+
+        try:
+            if password and self._has_plink():
+                args = ["pscp", "-r", "-batch", "-pw", password, local_path, dest]
+            else:
+                args = ["scp", "-r", local_path, dest]
+
+            result = subprocess.run(
+                args, capture_output=True, text=True, timeout=timeout,
                 **self._subprocess_kwargs()
             )
             return result.stdout.strip(), result.stderr.strip(), result.returncode
@@ -548,10 +607,19 @@ class OPSIToolbox(tk.Tk):
             self.dash_cards["server"]["value"].configure(text="Online", fg=SUCCESS)
             self.dash_cards["server"]["status"].configure(text="opsiconfd running")
             self._log_to(self.dash_log, "[OK] Server online, opsiconfd active", "ok")
+            self.conn_status.configure(text="Connected", fg=SUCCESS)
         elif rc == -1 and "parse error" in err:
             self.dash_cards["server"]["value"].configure(text="SSH Failed", fg=ERROR)
-            self.dash_cards["server"]["status"].configure(text="check SSH key auth")
-            self._log_to(self.dash_log, "[ERROR] SSH connection failed — ensure key-based auth is set up", "error")
+            self.dash_cards["server"]["status"].configure(text="check connection")
+            pw = self._get_password()
+            if not pw and not self._has_plink():
+                hint = "Enter password in sidebar, or install PuTTY (plink.exe) for password auth"
+            elif not pw:
+                hint = "Enter password in sidebar, or set up SSH key auth"
+            else:
+                hint = "Check server IP, user, and password"
+            self._log_to(self.dash_log, f"[ERROR] SSH connection failed — {hint}", "error")
+            self.conn_status.configure(text="Disconnected", fg=ERROR)
             return  # Don't bother with rest if SSH failed
         else:
             self.dash_cards["server"]["value"].configure(text="Offline", fg=ERROR)
@@ -1366,7 +1434,7 @@ userLoginScript:
 
         lines = [
             f"; Setup script for {data['name']}",
-            "; Generated by OPSI Toolbox",
+            "; Generated by OPSI PackForge",
             "",
             "[Actions]",
             'requiredWinstVersion >= "4.11.6"',
@@ -1421,7 +1489,7 @@ userLoginScript:
 
     def _generate_uninstall(self, data):
         return f"""; Uninstall script for {data['name']}
-; Generated by OPSI Toolbox
+; Generated by OPSI PackForge
 
 [Actions]
 Message "Uninstalling {data['name']}..."
@@ -1487,7 +1555,6 @@ Message "Uninstalling {data['name']}..."
     def _build_and_deploy(self):
         self._build_package()
         server = self._get_server()
-        user = self._get_user()
 
         data = {
             "id": self._get_text(self.pkg_id),
@@ -1501,13 +1568,9 @@ Message "Uninstalling {data['name']}..."
 
         def do_deploy():
             try:
-                result = subprocess.run(
-                    ["scp", "-r", pkg_path, f"{user}@{server}:/var/lib/opsi/workbench/"],
-                    capture_output=True, text=True,
-                    **self._subprocess_kwargs()
-                )
-                if result.returncode != 0:
-                    raise Exception(f"SCP failed: {result.stderr}")
+                _, err, rc = self._scp_cmd(pkg_path, "/var/lib/opsi/workbench/")
+                if rc != 0:
+                    raise Exception(f"SCP failed: {err}")
                 self.after(0, lambda: self._pkg_log("[OK] Files copied", "ok"))
 
                 overwrite_choice = self.overwrite_var.get()
@@ -1583,19 +1646,13 @@ Message "Uninstalling {data['name']}..."
         flag = "-S" if mode == "Setup on clients" else "-U"
 
         def do_update():
-            server = self._get_server()
-            user = self._get_user()
             fname = os.path.basename(opsi_file)
             remote_path = f"/var/lib/opsi/workbench/{fname}"
 
             try:
-                result = subprocess.run(
-                    ["scp", opsi_file, f"{user}@{server}:{remote_path}"],
-                    capture_output=True, text=True,
-                    **self._subprocess_kwargs()
-                )
-                if result.returncode != 0:
-                    raise Exception(f"SCP failed: {result.stderr}")
+                _, err, rc = self._scp_cmd(opsi_file, f"/var/lib/opsi/workbench/{fname}")
+                if rc != 0:
+                    raise Exception(f"SCP failed: {err}")
                 self.after(0, lambda: self._pkg_log("[OK] File uploaded", "ok"))
 
                 out, err, rc = self._ssh_cmd(f"opsi-package-manager {flag} -i {remote_path}", timeout=120)
@@ -1966,19 +2023,11 @@ Message "Uninstalling {data['name']}..."
         self._diag_log(f"Testing SSH to {host}...", "info")
 
         def do_ssh():
-            try:
-                result = subprocess.run(
-                    ["ssh", "-o", "ConnectTimeout=5", "-o", "StrictHostKeyChecking=no",
-                     f"root@{host}", "echo 'SSH OK'"],
-                    capture_output=True, text=True, timeout=10,
-                    **self._subprocess_kwargs()
-                )
-                if result.returncode == 0:
-                    self.after(0, lambda: self._diag_log("SSH connection successful", "ok"))
-                else:
-                    self.after(0, lambda: self._diag_log(f"SSH failed: {result.stderr}", "error"))
-            except Exception as e:
-                self.after(0, lambda: self._diag_log(f"Error: {str(e)}", "error"))
+            out, err, rc = self._ssh_cmd("echo 'SSH OK'", timeout=10)
+            if rc == 0:
+                self.after(0, lambda: self._diag_log("SSH connection successful", "ok"))
+            else:
+                self.after(0, lambda: self._diag_log(f"SSH failed: {err}", "error"))
 
         threading.Thread(target=do_ssh, daemon=True).start()
 
@@ -2261,5 +2310,5 @@ Message "Uninstalling {data['name']}..."
 # ══════════════════════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
-    app = OPSIToolbox()
+    app = OPSIPackForge()
     app.mainloop()
