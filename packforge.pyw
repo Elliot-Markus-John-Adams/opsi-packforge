@@ -287,6 +287,10 @@ class OPSIPackForge(tk.Tk):
                                         font=(FONT, 11), width=18)
         self.global_password.pack(fill="x", pady=(2, 0))
 
+        # Setup SSH Key button
+        ModernButton(settings_frame, text="Setup SSH Key",
+                    command=self._setup_ssh_key, width=130, height=28).pack(anchor="w", pady=(10, 0))
+
         # Connection status
         self.conn_status = tk.Label(settings_frame, text="", font=(FONT, 8),
                                     bg=SIDEBAR, fg=TEXT_MUTED)
@@ -351,10 +355,10 @@ class OPSIPackForge(tk.Tk):
             self._plink_cache = shutil.which("plink") is not None
         return self._plink_cache
 
-    def _subprocess_kwargs(self):
+    def _subprocess_kwargs(self, hide=True):
         """Return extra kwargs to hide console windows on Windows."""
         kwargs = {}
-        if os.name == "nt":
+        if os.name == "nt" and hide:
             si = subprocess.STARTUPINFO()
             si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
             si.wShowWindow = 0  # SW_HIDE
@@ -370,22 +374,53 @@ class OPSIPackForge(tk.Tk):
 
         try:
             if password and self._has_plink():
-                # Use plink with password (no console window, no TTY needed)
+                # plink: password auth, fully hidden, no TTY needed
                 args = ["plink", "-ssh", "-batch", "-pw", password,
                         f"{user}@{server}", cmd]
+                result = subprocess.run(
+                    args, capture_output=True, text=True, timeout=timeout,
+                    **self._subprocess_kwargs(hide=True)
+                )
             elif password and os.name == "nt":
-                # Fallback: OpenSSH with password via stdin (may not work on all Windows)
+                # Windows SSH with password: create askpass script
+                import tempfile
+                askpass_path = os.path.join(tempfile.gettempdir(), "opsi_askpass.bat")
+                with open(askpass_path, "w") as f:
+                    f.write(f"@echo {password}\n")
+                env = os.environ.copy()
+                env["SSH_ASKPASS"] = askpass_path
+                env["SSH_ASKPASS_REQUIRE"] = "force"
+                env["DISPLAY"] = ":0"
                 args = ["ssh", "-o", "ConnectTimeout=5", "-o", "StrictHostKeyChecking=no",
                         f"{user}@{server}", cmd]
+                result = subprocess.run(
+                    args, capture_output=True, text=True, timeout=timeout,
+                    stdin=subprocess.DEVNULL, env=env,
+                    **self._subprocess_kwargs(hide=True)
+                )
+                try:
+                    os.remove(askpass_path)
+                except OSError:
+                    pass
             else:
-                # Key-based auth (BatchMode prevents password popups)
-                args = ["ssh", "-o", "ConnectTimeout=5", "-o", "StrictHostKeyChecking=no",
-                        "-o", "BatchMode=yes", f"{user}@{server}", cmd]
+                # No password: key-based auth or let SSH prompt (one window)
+                has_keys = os.path.exists(os.path.expanduser("~/.ssh/id_rsa")) or \
+                           os.path.exists(os.path.expanduser("~/.ssh/id_ed25519"))
+                if has_keys:
+                    args = ["ssh", "-o", "ConnectTimeout=5", "-o", "StrictHostKeyChecking=no",
+                            "-o", "BatchMode=yes", f"{user}@{server}", cmd]
+                    result = subprocess.run(
+                        args, capture_output=True, text=True, timeout=timeout,
+                        **self._subprocess_kwargs(hide=True)
+                    )
+                else:
+                    # No keys, no password — let SSH prompt visibly (single window)
+                    args = ["ssh", "-o", "ConnectTimeout=5", "-o", "StrictHostKeyChecking=no",
+                            f"{user}@{server}", cmd]
+                    result = subprocess.run(
+                        args, capture_output=True, text=True, timeout=timeout
+                    )
 
-            result = subprocess.run(
-                args, capture_output=True, text=True, timeout=timeout,
-                **self._subprocess_kwargs()
-            )
             return result.stdout.strip(), result.stderr.strip(), result.returncode
         except subprocess.TimeoutExpired:
             return "", "Timeout", -1
@@ -402,12 +437,32 @@ class OPSIPackForge(tk.Tk):
         try:
             if password and self._has_plink():
                 args = ["pscp", "-r", "-batch", "-pw", password, local_path, dest]
+            elif password and os.name == "nt":
+                import tempfile
+                askpass_path = os.path.join(tempfile.gettempdir(), "opsi_askpass.bat")
+                with open(askpass_path, "w") as f:
+                    f.write(f"@echo {password}\n")
+                env = os.environ.copy()
+                env["SSH_ASKPASS"] = askpass_path
+                env["SSH_ASKPASS_REQUIRE"] = "force"
+                env["DISPLAY"] = ":0"
+                result = subprocess.run(
+                    ["scp", "-r", local_path, dest],
+                    capture_output=True, text=True, timeout=timeout,
+                    stdin=subprocess.DEVNULL, env=env,
+                    **self._subprocess_kwargs(hide=True)
+                )
+                try:
+                    os.remove(askpass_path)
+                except OSError:
+                    pass
+                return result.stdout.strip(), result.stderr.strip(), result.returncode
             else:
                 args = ["scp", "-r", local_path, dest]
 
             result = subprocess.run(
                 args, capture_output=True, text=True, timeout=timeout,
-                **self._subprocess_kwargs()
+                **self._subprocess_kwargs(hide=True)
             )
             return result.stdout.strip(), result.stderr.strip(), result.returncode
         except subprocess.TimeoutExpired:
@@ -446,6 +501,116 @@ class OPSIPackForge(tk.Tk):
             out, err, rc = self._ssh_cmd(cmd, timeout)
             self.after(0, lambda: callback(out, err, rc))
         threading.Thread(target=run, daemon=True).start()
+
+    def _setup_ssh_key(self):
+        """Generate SSH key pair and copy public key to server."""
+        server = self._get_server()
+        user = self._get_user()
+        password = self._get_password()
+
+        if not password:
+            messagebox.showinfo("Password Required",
+                "Enter the server password in the sidebar first.\n\n"
+                "The password is needed once to copy your SSH key to the server.\n"
+                "After that, password-less login will work.")
+            return
+
+        self.conn_status.configure(text="Setting up SSH key...", fg=WARNING)
+
+        def do_setup():
+            ssh_dir = os.path.expanduser("~/.ssh")
+            key_path = os.path.join(ssh_dir, "id_ed25519")
+            pub_path = key_path + ".pub"
+
+            try:
+                # Create .ssh directory if needed
+                os.makedirs(ssh_dir, exist_ok=True)
+
+                # Generate key if it doesn't exist
+                if not os.path.exists(key_path):
+                    self.after(0, lambda: self.conn_status.configure(text="Generating key...", fg=WARNING))
+                    result = subprocess.run(
+                        ["ssh-keygen", "-t", "ed25519", "-f", key_path, "-N", ""],
+                        capture_output=True, text=True, timeout=30,
+                        **self._subprocess_kwargs(hide=True)
+                    )
+                    if result.returncode != 0:
+                        self.after(0, lambda: self.conn_status.configure(text="Key generation failed", fg=ERROR))
+                        self.after(0, lambda: messagebox.showerror("Error", f"ssh-keygen failed:\n{result.stderr}"))
+                        return
+
+                # Read public key
+                with open(pub_path, "r") as f:
+                    pub_key = f.read().strip()
+
+                # Copy to server using password auth (one-time, visible window for password)
+                self.after(0, lambda: self.conn_status.configure(text="Copying key to server...", fg=WARNING))
+                copy_cmd = (
+                    f'mkdir -p ~/.ssh && chmod 700 ~/.ssh && '
+                    f'echo "{pub_key}" >> ~/.ssh/authorized_keys && '
+                    f'chmod 600 ~/.ssh/authorized_keys && echo KEY_COPIED_OK'
+                )
+
+                if self._has_plink():
+                    args = ["plink", "-ssh", "-batch", "-pw", password,
+                            f"{user}@{server}", copy_cmd]
+                    result = subprocess.run(
+                        args, capture_output=True, text=True, timeout=30,
+                        **self._subprocess_kwargs(hide=True)
+                    )
+                else:
+                    # Use SSH_ASKPASS or visible window
+                    import tempfile
+                    askpass_path = os.path.join(tempfile.gettempdir(), "opsi_askpass.bat")
+                    env = os.environ.copy()
+                    if os.name == "nt":
+                        with open(askpass_path, "w") as f:
+                            f.write(f"@echo {password}\n")
+                        env["SSH_ASKPASS"] = askpass_path
+                        env["SSH_ASKPASS_REQUIRE"] = "force"
+                        env["DISPLAY"] = ":0"
+
+                    args = ["ssh", "-o", "ConnectTimeout=10", "-o", "StrictHostKeyChecking=no",
+                            f"{user}@{server}", copy_cmd]
+                    result = subprocess.run(
+                        args, capture_output=True, text=True, timeout=30,
+                        stdin=subprocess.DEVNULL, env=env
+                    )
+                    if os.name == "nt":
+                        try:
+                            os.remove(askpass_path)
+                        except OSError:
+                            pass
+
+                if "KEY_COPIED_OK" in result.stdout:
+                    # Verify key auth works
+                    test = subprocess.run(
+                        ["ssh", "-o", "ConnectTimeout=5", "-o", "StrictHostKeyChecking=no",
+                         "-o", "BatchMode=yes", f"{user}@{server}", "echo SSH_KEY_OK"],
+                        capture_output=True, text=True, timeout=10,
+                        **self._subprocess_kwargs(hide=True)
+                    )
+                    if "SSH_KEY_OK" in test.stdout:
+                        self.after(0, lambda: self.conn_status.configure(text="Key auth working!", fg=SUCCESS))
+                        self.after(0, lambda: messagebox.showinfo("Success",
+                            "SSH key authentication is set up!\n\n"
+                            "You can now clear the password field.\n"
+                            "All connections will use key auth."))
+                        return
+
+                self.after(0, lambda: self.conn_status.configure(text="Key copy failed", fg=ERROR))
+                err = result.stderr or result.stdout
+                self.after(0, lambda: messagebox.showerror("Failed",
+                    f"Could not copy SSH key to server.\n\n"
+                    f"The server may not allow password auth.\n"
+                    f"Manually run: ssh-copy-id {user}@{server}\n\n"
+                    f"Error: {err[:200]}"))
+
+            except Exception as e:
+                self.after(0, lambda: self.conn_status.configure(text="Setup failed", fg=ERROR))
+                self.after(0, lambda: messagebox.showerror("Error", str(e)))
+
+        threading.Thread(target=do_setup, daemon=True).start()
 
     def _create_card(self, parent, title, expand=False):
         card = tk.Frame(parent, bg=CARD)
@@ -612,12 +777,10 @@ class OPSIPackForge(tk.Tk):
             self.dash_cards["server"]["value"].configure(text="SSH Failed", fg=ERROR)
             self.dash_cards["server"]["status"].configure(text="check connection")
             pw = self._get_password()
-            if not pw and not self._has_plink():
-                hint = "Enter password in sidebar, or install PuTTY (plink.exe) for password auth"
-            elif not pw:
-                hint = "Enter password in sidebar, or set up SSH key auth"
+            if not pw:
+                hint = "Enter password in sidebar and click Refresh"
             else:
-                hint = "Check server IP, user, and password"
+                hint = "Check server IP, user, and password. Install PuTTY for best results."
             self._log_to(self.dash_log, f"[ERROR] SSH connection failed — {hint}", "error")
             self.conn_status.configure(text="Disconnected", fg=ERROR)
             return  # Don't bother with rest if SSH failed
