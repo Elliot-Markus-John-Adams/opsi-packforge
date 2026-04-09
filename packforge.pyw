@@ -346,7 +346,7 @@ class OPSIToolbox(tk.Tk):
         try:
             result = subprocess.run(
                 ["ssh", "-o", "ConnectTimeout=5", "-o", "StrictHostKeyChecking=no",
-                 f"{user}@{server}", cmd],
+                 "-o", "BatchMode=yes", f"{user}@{server}", cmd],
                 capture_output=True, text=True, timeout=timeout,
                 **self._subprocess_kwargs()
             )
@@ -355,6 +355,31 @@ class OPSIToolbox(tk.Tk):
             return "", "Timeout", -1
         except Exception as e:
             return "", str(e), -1
+
+    def _ssh_multi(self, commands, timeout=60):
+        """Run multiple commands in a single SSH session. Returns dict of {label: (stdout, stderr, rc)}."""
+        # Build a script that runs each command with delimiters
+        parts = []
+        labels = []
+        for label, cmd in commands:
+            labels.append(label)
+            parts.append(f'echo "===OPSI_DELIM_{label}_START==="; {cmd} 2>&1; echo "===OPSI_DELIM_{label}_RC=$?==="')
+        full_cmd = "; ".join(parts)
+        out, err, rc = self._ssh_cmd(full_cmd, timeout)
+
+        results = {}
+        for label in labels:
+            start_marker = f"===OPSI_DELIM_{label}_START==="
+            rc_pattern = f"===OPSI_DELIM_{label}_RC="
+            try:
+                start = out.index(start_marker) + len(start_marker)
+                end = out.index(rc_pattern, start)
+                output = out[start:end].strip()
+                rc_str = out[end + len(rc_pattern):out.index("===", end + len(rc_pattern))]
+                results[label] = (output, "", int(rc_str))
+            except (ValueError, IndexError):
+                results[label] = ("", "parse error", -1)
+        return results
 
     def _ssh_bg(self, cmd, callback, timeout=30):
         """Run SSH command in background thread, call callback(stdout, stderr, rc) on completion."""
@@ -501,84 +526,102 @@ class OPSIToolbox(tk.Tk):
             self.dash_cards[key]["value"].configure(text="...", fg=TEXT_MUTED)
             self.dash_cards[key]["status"].configure(text="")
 
+        # Single SSH connection for all dashboard data
+        commands = [
+            ("server", "systemctl is-active opsiconfd 2>/dev/null"),
+            ("packages", "opsi-package-manager -l 2>/dev/null | wc -l"),
+            ("clients", """opsi-admin -d -S method hostControlSafe_reachable '["*"]' 2>/dev/null || echo '{}'"""),
+            ("disk", "df /var/lib/opsi --output=pcent,avail 2>/dev/null | tail -1"),
+            ("failed", """opsi-admin -d -S method productOnClient_getObjects '[]' '{"actionResult":"failed"}' 2>/dev/null || echo '[]'"""),
+        ]
+
+        def do_refresh():
+            results = self._ssh_multi(commands, timeout=60)
+            self.after(0, lambda: self._apply_dashboard_results(results))
+
+        threading.Thread(target=do_refresh, daemon=True).start()
+
+    def _apply_dashboard_results(self, results):
         # Server status
-        def on_server(out, err, rc):
-            if rc == 0 and "active" in out:
-                self.dash_cards["server"]["value"].configure(text="Online", fg=SUCCESS)
-                self.dash_cards["server"]["status"].configure(text="opsiconfd running")
-                self._log_to(self.dash_log, "[OK] Server online, opsiconfd active", "ok")
-            else:
-                self.dash_cards["server"]["value"].configure(text="Offline", fg=ERROR)
-                self.dash_cards["server"]["status"].configure(text=err[:40] if err else "unreachable")
-                self._log_to(self.dash_log, f"[ERROR] Server: {err or 'unreachable'}", "error")
-        self._ssh_bg("systemctl is-active opsiconfd", on_server)
+        out, err, rc = results.get("server", ("", "", -1))
+        if rc == 0 and "active" in out:
+            self.dash_cards["server"]["value"].configure(text="Online", fg=SUCCESS)
+            self.dash_cards["server"]["status"].configure(text="opsiconfd running")
+            self._log_to(self.dash_log, "[OK] Server online, opsiconfd active", "ok")
+        elif rc == -1 and "parse error" in err:
+            self.dash_cards["server"]["value"].configure(text="SSH Failed", fg=ERROR)
+            self.dash_cards["server"]["status"].configure(text="check SSH key auth")
+            self._log_to(self.dash_log, "[ERROR] SSH connection failed — ensure key-based auth is set up", "error")
+            return  # Don't bother with rest if SSH failed
+        else:
+            self.dash_cards["server"]["value"].configure(text="Offline", fg=ERROR)
+            self.dash_cards["server"]["status"].configure(text="service not active")
+            self._log_to(self.dash_log, f"[ERROR] opsiconfd not active", "error")
 
         # Package count
-        def on_packages(out, err, rc):
-            if rc == 0:
-                lines = [l for l in out.split("\n") if l.strip()]
-                count = len(lines)
+        out, err, rc = results.get("packages", ("", "", -1))
+        if rc == 0 and out:
+            try:
+                count = int(out.strip())
                 self.dash_cards["packages"]["value"].configure(text=str(count), fg=TEXT)
                 self.dash_cards["packages"]["status"].configure(text="installed on depot")
                 self._log_to(self.dash_log, f"[OK] {count} packages on depot", "ok")
-            else:
+            except ValueError:
                 self.dash_cards["packages"]["value"].configure(text="?", fg=WARNING)
-                self._log_to(self.dash_log, f"[WARN] Could not list packages", "warn")
-        self._ssh_bg("opsi-package-manager -l 2>/dev/null", on_packages)
+        else:
+            self.dash_cards["packages"]["value"].configure(text="?", fg=WARNING)
 
         # Clients online
-        def on_clients(out, err, rc):
-            if rc == 0 and out:
-                try:
-                    data = json.loads(out)
-                    total = len(data)
-                    online = sum(1 for v in data.values() if v is True)
-                    self.dash_cards["clients"]["value"].configure(
-                        text=f"{online}/{total}", fg=SUCCESS if online > 0 else TEXT)
-                    self.dash_cards["clients"]["status"].configure(text="reachable")
-                    self._log_to(self.dash_log, f"[OK] {online}/{total} clients online", "ok")
-                except (json.JSONDecodeError, AttributeError):
-                    self.dash_cards["clients"]["value"].configure(text="?", fg=WARNING)
-                    self._log_to(self.dash_log, f"[WARN] Could not parse client data", "warn")
-            else:
+        out, err, rc = results.get("clients", ("", "", -1))
+        if out:
+            try:
+                data = json.loads(out)
+                total = len(data)
+                online = sum(1 for v in data.values() if v is True)
+                self.dash_cards["clients"]["value"].configure(
+                    text=f"{online}/{total}", fg=SUCCESS if online > 0 else TEXT)
+                self.dash_cards["clients"]["status"].configure(text="reachable")
+                self._log_to(self.dash_log, f"[OK] {online}/{total} clients online", "ok")
+            except (json.JSONDecodeError, AttributeError):
                 self.dash_cards["clients"]["value"].configure(text="?", fg=WARNING)
-        self._ssh_bg("""opsi-admin -d -S method hostControlSafe_reachable '["*"]' 2>/dev/null || echo '{}'""", on_clients)
+        else:
+            self.dash_cards["clients"]["value"].configure(text="?", fg=WARNING)
 
         # Disk space
-        def on_disk(out, err, rc):
-            if rc == 0 and out:
-                lines = out.strip().split("\n")
-                if len(lines) >= 2:
-                    parts = lines[1].split()
-                    if len(parts) >= 2:
-                        pct = parts[0].strip()
-                        avail = parts[1].strip() if len(parts) > 1 else ""
-                        pct_num = int(pct.replace("%", "")) if "%" in pct else 0
-                        color = SUCCESS if pct_num < 80 else (WARNING if pct_num < 90 else ERROR)
-                        self.dash_cards["disk"]["value"].configure(text=pct, fg=color)
-                        self.dash_cards["disk"]["status"].configure(text=f"{avail} available")
-                        self._log_to(self.dash_log, f"[OK] Disk usage: {pct} ({avail} free)", "ok")
-                        return
+        out, err, rc = results.get("disk", ("", "", -1))
+        if out:
+            parts = out.strip().split()
+            if parts:
+                pct = parts[0].strip()
+                avail = parts[1].strip() if len(parts) > 1 else ""
+                pct_num = int(pct.replace("%", "")) if "%" in pct else 0
+                color = SUCCESS if pct_num < 80 else (WARNING if pct_num < 90 else ERROR)
+                self.dash_cards["disk"]["value"].configure(text=pct, fg=color)
+                self.dash_cards["disk"]["status"].configure(text=f"{avail} available")
+                self._log_to(self.dash_log, f"[OK] Disk usage: {pct} ({avail} free)", "ok")
+            else:
+                self.dash_cards["disk"]["value"].configure(text="?", fg=WARNING)
+        else:
             self.dash_cards["disk"]["value"].configure(text="?", fg=WARNING)
-        self._ssh_bg("df /var/lib/opsi --output=pcent,avail 2>/dev/null | tail -1", on_disk)
 
         # Failed deployments
-        def on_failed(out, err, rc):
-            if rc == 0:
-                try:
-                    data = json.loads(out) if out else []
-                    count = len(data)
-                    color = SUCCESS if count == 0 else ERROR
-                    self.dash_cards["failed"]["value"].configure(text=str(count), fg=color)
-                    self.dash_cards["failed"]["status"].configure(
-                        text="all good" if count == 0 else "need attention")
-                    tag = "ok" if count == 0 else "error"
-                    self._log_to(self.dash_log, f"[{'OK' if count == 0 else 'WARN'}] {count} failed deployments", tag)
-                except json.JSONDecodeError:
-                    self.dash_cards["failed"]["value"].configure(text="?", fg=WARNING)
-            else:
+        out, err, rc = results.get("failed", ("", "", -1))
+        if out:
+            try:
+                data = json.loads(out) if out else []
+                count = len(data)
+                color = SUCCESS if count == 0 else ERROR
+                self.dash_cards["failed"]["value"].configure(text=str(count), fg=color)
+                self.dash_cards["failed"]["status"].configure(
+                    text="all good" if count == 0 else "need attention")
+                tag = "ok" if count == 0 else "error"
+                self._log_to(self.dash_log, f"[{'OK' if count == 0 else 'WARN'}] {count} failed deployments", tag)
+            except json.JSONDecodeError:
                 self.dash_cards["failed"]["value"].configure(text="?", fg=WARNING)
-        self._ssh_bg("""opsi-admin -d -S method productOnClient_getObjects '[]' '{"actionResult":"failed"}' 2>/dev/null || echo '[]'""", on_failed)
+        else:
+            self.dash_cards["failed"]["value"].configure(text="?", fg=WARNING)
+
+        self._log_to(self.dash_log, "\nDashboard refresh complete", "info")
 
     # ══════════════════════════════════════════════════════════════════════════
     # PACKAGING
@@ -1988,66 +2031,79 @@ Message "Uninstalling {data['name']}..."
         self._run_quick_health_checks()
 
     def _run_quick_health_checks(self):
-        # Disk space
-        def on_disk(out, err, rc):
-            lbl = self.health_check_labels["Disk Space"]
-            if rc == 0 and out:
-                lbl["value"].configure(text=out.strip())
-                pct = int(re.search(r'(\d+)%', out).group(1)) if re.search(r'(\d+)%', out) else 0
-                lbl["dot"].configure(fg=SUCCESS if pct < 80 else (WARNING if pct < 90 else ERROR))
-            else:
-                lbl["value"].configure(text="Error")
-                lbl["dot"].configure(fg=ERROR)
-        self._ssh_bg("df /var/lib/opsi --output=pcent 2>/dev/null | tail -1", on_disk)
+        commands = [
+            ("disk", "df /var/lib/opsi --output=pcent 2>/dev/null | tail -1"),
+            ("cert", "openssl s_client -connect localhost:4447 </dev/null 2>/dev/null | openssl x509 -noout -enddate 2>/dev/null"),
+            ("ntp", "timedatectl show --property=NTPSynchronized --value 2>/dev/null || echo unknown"),
+            ("ver", "opsi-cli --version 2>/dev/null || opsiconfd --version 2>/dev/null"),
+            ("paedml", "cat /etc/paedml-version 2>/dev/null"),
+        ]
+
+        def do_checks():
+            results = self._ssh_multi(commands, timeout=30)
+            self.after(0, lambda: self._apply_health_results(results))
+
+        threading.Thread(target=do_checks, daemon=True).start()
+
+    def _apply_health_results(self, results):
+        # Disk
+        out, _, _ = results.get("disk", ("", "", -1))
+        lbl = self.health_check_labels["Disk Space"]
+        if out:
+            lbl["value"].configure(text=out.strip())
+            pct = int(re.search(r'(\d+)%', out).group(1)) if re.search(r'(\d+)%', out) else 0
+            lbl["dot"].configure(fg=SUCCESS if pct < 80 else (WARNING if pct < 90 else ERROR))
+        else:
+            lbl["value"].configure(text="Error"); lbl["dot"].configure(fg=ERROR)
 
         # Certificate
-        def on_cert(out, err, rc):
-            lbl = self.health_check_labels["Certificate Expiry"]
-            if rc == 0 and out:
-                lbl["value"].configure(text=out.replace("notAfter=", "").strip())
-                lbl["dot"].configure(fg=SUCCESS)
-            else:
-                lbl["value"].configure(text="Check failed" if rc != 0 else "N/A")
-                lbl["dot"].configure(fg=WARNING)
-        self._ssh_bg("openssl s_client -connect localhost:4447 </dev/null 2>/dev/null | openssl x509 -noout -enddate 2>/dev/null", on_cert)
+        out, _, rc = results.get("cert", ("", "", -1))
+        lbl = self.health_check_labels["Certificate Expiry"]
+        if out:
+            lbl["value"].configure(text=out.replace("notAfter=", "").strip())
+            lbl["dot"].configure(fg=SUCCESS)
+        else:
+            lbl["value"].configure(text="N/A"); lbl["dot"].configure(fg=WARNING)
 
         # NTP
-        def on_ntp(out, err, rc):
-            lbl = self.health_check_labels["NTP Sync"]
-            if rc == 0:
-                synced = "yes" in out.lower()
-                lbl["value"].configure(text="Synced" if synced else "NOT synced")
-                lbl["dot"].configure(fg=SUCCESS if synced else ERROR)
-            else:
-                lbl["value"].configure(text="Unknown")
-                lbl["dot"].configure(fg=WARNING)
-        self._ssh_bg("timedatectl show --property=NTPSynchronized --value 2>/dev/null || echo unknown", on_ntp)
+        out, _, _ = results.get("ntp", ("", "", -1))
+        lbl = self.health_check_labels["NTP Sync"]
+        synced = "yes" in out.lower() if out else False
+        lbl["value"].configure(text="Synced" if synced else "NOT synced")
+        lbl["dot"].configure(fg=SUCCESS if synced else ERROR)
 
         # OPSI version
-        def on_ver(out, err, rc):
-            lbl = self.health_check_labels["OPSI Version"]
-            lbl["value"].configure(text=out.strip() if out else "Unknown")
-            lbl["dot"].configure(fg=SUCCESS if out else WARNING)
-        self._ssh_bg("opsi-cli --version 2>/dev/null || opsiconfd --version 2>/dev/null", on_ver)
+        out, _, _ = results.get("ver", ("", "", -1))
+        lbl = self.health_check_labels["OPSI Version"]
+        lbl["value"].configure(text=out.strip() if out else "Unknown")
+        lbl["dot"].configure(fg=SUCCESS if out else WARNING)
 
         # paedML version
-        def on_paedml(out, err, rc):
-            lbl = self.health_check_labels["paedML Version"]
-            lbl["value"].configure(text=out.strip() if out else "Not paedML")
-            lbl["dot"].configure(fg=SUCCESS if out else TEXT_MUTED)
-        self._ssh_bg("cat /etc/paedml-version 2>/dev/null", on_paedml)
+        out, _, _ = results.get("paedml", ("", "", -1))
+        lbl = self.health_check_labels["paedML Version"]
+        lbl["value"].configure(text=out.strip() if out else "Not paedML")
+        lbl["dot"].configure(fg=SUCCESS if out else TEXT_MUTED)
 
     def _check_services(self):
         for svc, dot in self.svc_labels.items():
             dot.configure(fg=TEXT_MUTED)
 
-        for svc in self.svc_labels:
-            def on_svc(out, err, rc, s=svc):
-                if rc == 0 and "active" in out:
-                    self.svc_labels[s].configure(fg=SUCCESS)
-                else:
-                    self.svc_labels[s].configure(fg=ERROR)
-            self._ssh_bg(f"systemctl is-active {svc} 2>/dev/null", on_svc)
+        services = list(self.svc_labels.keys())
+        commands = [(svc, f"systemctl is-active {svc} 2>/dev/null") for svc in services]
+
+        def do_check():
+            results = self._ssh_multi(commands, timeout=30)
+            self.after(0, lambda: self._apply_service_results(results))
+
+        threading.Thread(target=do_check, daemon=True).start()
+
+    def _apply_service_results(self, results):
+        for svc, dot in self.svc_labels.items():
+            out, _, rc = results.get(svc, ("", "", -1))
+            if rc == 0 and "active" in out:
+                dot.configure(fg=SUCCESS)
+            else:
+                dot.configure(fg=ERROR)
 
     def _check_client(self):
         client = self.diag_client_entry.get_value()
