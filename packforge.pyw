@@ -351,6 +351,20 @@ class OPSIPackForge(tk.Tk):
     def _get_password(self):
         return self.global_password.get()
 
+    @staticmethod
+    def _parse_json(raw):
+        """Extract JSON from output that may have SSH banners prepended."""
+        if not raw or not raw.strip():
+            return None
+        text = raw.strip()
+        for i, ch in enumerate(text):
+            if ch in ('[', '{'):
+                try:
+                    return json.loads(text[i:])
+                except json.JSONDecodeError:
+                    continue
+        return None
+
     def _has_plink(self):
         """Check if plink.exe is available."""
         if not hasattr(self, "_plink_cache"):
@@ -1764,7 +1778,7 @@ Message "Uninstalling {data['name']}..."
                     return
 
                 out, err, rc = self._ssh_cmd(
-                    f"opsi-package-manager -i /var/lib/opsi/workbench/{pkg_folder}-*.opsi",
+                    f"TERM=dumb opsi-package-manager -i /var/lib/opsi/workbench/{pkg_folder}-*.opsi 2>&1 | cat",
                     timeout=120
                 )
                 if out:
@@ -1817,7 +1831,7 @@ Message "Uninstalling {data['name']}..."
                     raise Exception(f"SCP failed: {err}")
                 self.after(0, lambda: self._pkg_log("[OK] File uploaded", "ok"))
 
-                out, err, rc = self._ssh_cmd(f"opsi-package-manager {flag} -i {remote_path}", timeout=120)
+                out, err, rc = self._ssh_cmd(f"TERM=dumb opsi-package-manager {flag} -i {remote_path} 2>&1 | cat", timeout=120)
                 if out:
                     self.after(0, lambda o=out: self._pkg_log(o, ""))
                 if rc != 0:
@@ -1878,7 +1892,7 @@ Message "Uninstalling {data['name']}..."
             for pid in product_ids:
                 flag = "--purge" if purge else "-r"
                 depot = "-d ALL" if all_depots else ""
-                cmd = f"opsi-package-manager {flag} {depot} {pid}".strip()
+                cmd = f"TERM=dumb opsi-package-manager {flag} {depot} {pid} 2>&1 | cat".strip()
                 self.after(0, lambda c=cmd: self._pkg_log(f"Running: {c}", "info"))
 
                 out, err, rc = self._ssh_cmd(cmd, timeout=60)
@@ -1926,44 +1940,49 @@ Message "Uninstalling {data['name']}..."
         loading.pack(pady=20)
 
         def fetch():
-            # Single SSH session: get clients and groups
-            commands = [
-                ("clients", """opsi-cli --output-format json jsonrpc execute host_getObjects '[]' '{"type":"OpsiClient"}' 2>/dev/null"""),
-                ("groups", """opsi-cli --output-format json jsonrpc execute group_getObjects '[]' '{"type":"HostGroup"}' 2>/dev/null"""),
-            ]
-            results = self._ssh_multi(commands, timeout=60)
+            self.after(0, lambda: self._wol_log("Fetching clients...", "info"))
 
+            # Get clients - single SSH call
+            cout, cerr, crc = self._ssh_cmd(
+                """opsi-cli --output-format json jsonrpc execute host_getObjects '[]' '{"type":"OpsiClient"}' 2>/dev/null""",
+                timeout=60
+            )
             clients = []
-            cout, cerr, crc = results.get("clients", ("", "", -1))
-            if cout:
+            if crc == 0 and cout:
                 try:
-                    data = json.loads(cout)
-                    for c in data:
-                        clients.append({
-                            "id": c.get("id", ""),
-                            "ip": c.get("ipAddress", "") or "",
-                            "mac": c.get("hardwareAddress", "") or "",
-                        })
-                except json.JSONDecodeError:
-                    self.after(0, lambda e=cout[:200]: self._wol_log(f"JSON parse error: {e}", "error"))
+                    data = self._parse_json(cout)
+                    if data:
+                        for c in data:
+                            clients.append({
+                                "id": c.get("id", ""),
+                                "ip": c.get("ipAddress", "") or "",
+                                "mac": c.get("hardwareAddress", "") or "",
+                            })
+                except (json.JSONDecodeError, TypeError, AttributeError) as e:
+                    self.after(0, lambda: self._wol_log(f"JSON parse error: {e}", "error"))
+            else:
+                self.after(0, lambda: self._wol_log(f"SSH error (rc={crc}): {cerr[:200]}", "error"))
 
+            # Get groups - single SSH call
+            gout, _, _ = self._ssh_cmd(
+                """opsi-cli --output-format json jsonrpc execute group_getObjects '[]' '{"type":"HostGroup"}' 2>/dev/null""",
+                timeout=30
+            )
             groups = []
-            gout, _, _ = results.get("groups", ("", "", -1))
             if gout:
                 try:
-                    grp_data = json.loads(gout)
-                    groups = [g.get("id", "") for g in grp_data if g.get("id")]
-                except json.JSONDecodeError:
+                    grp_data = self._parse_json(gout)
+                    if grp_data:
+                        groups = [g.get("id", "") for g in grp_data if g.get("id")]
+                except (json.JSONDecodeError, TypeError, AttributeError):
                     pass
 
-            if not clients:
-                self.after(0, lambda: self._wol_log(f"No clients found. RC={crc}, err={cerr[:100]}", "error"))
-
-            # Reachability check separately (can be slow, do after showing clients)
+            # Show clients immediately
             self.after(0, lambda: self._populate_wol_clients(clients, {}, groups))
 
-            # Now fetch reachability in background
+            # Fetch reachability in background (can be slow)
             if clients:
+                self.after(0, lambda: self._wol_log("Checking reachability...", "info"))
                 reach_out, _, _ = self._ssh_cmd(
                     """opsi-cli --output-format json jsonrpc execute hostControlSafe_reachable '["*"]' 2>/dev/null""",
                     timeout=120
@@ -1971,8 +1990,8 @@ Message "Uninstalling {data['name']}..."
                 reachable = {}
                 if reach_out:
                     try:
-                        reachable = json.loads(reach_out)
-                    except json.JSONDecodeError:
+                        reachable = self._parse_json(reach_out) or {}
+                    except (json.JSONDecodeError, TypeError):
                         pass
                 if reachable:
                     self.after(0, lambda r=reachable: self._update_wol_status(r))
@@ -1993,7 +2012,7 @@ Message "Uninstalling {data['name']}..."
         self.wol_status_labels = {}
         for client in clients:
             cid = client["id"]
-            is_online = reachable.get(cid, False) is True
+            _r = reachable.get(cid, False); is_online = (_r is True) or (isinstance(_r, dict) and _r.get("result") is True)
 
             row = tk.Frame(self.wol_client_frame, bg=BG_SECONDARY)
             row.pack(fill="x", pady=1)
@@ -2032,7 +2051,7 @@ Message "Uninstalling {data['name']}..."
         """Update client status labels after reachability check."""
         online = 0
         for cid, lbl in self.wol_status_labels.items():
-            is_online = reachable.get(cid, False) is True
+            _r = reachable.get(cid, False); is_online = (_r is True) or (isinstance(_r, dict) and _r.get("result") is True)
             if is_online:
                 lbl.configure(text="Online", fg=SUCCESS)
                 online += 1
@@ -2084,7 +2103,7 @@ Message "Uninstalling {data['name']}..."
                 self.after(0, lambda: self._wol_log(f"[ERROR] {err}", "error"))
                 return
             try:
-                members = json.loads(out)
+                members = self._parse_json(out) or []
                 client_ids = [m.get("objectId", "") for m in members if m.get("objectId")]
                 if not client_ids:
                     self.after(0, lambda: self._wol_log("No clients in group", "warn"))
@@ -2352,7 +2371,7 @@ Message "Uninstalling {data['name']}..."
             )
             if rc == 0 and out:
                 try:
-                    products = json.loads(out)
+                    products = self._parse_json(out) or []
                     self.after(0, lambda: self._log_to(self.client_output, f"\nProducts ({len(products)}):", "info"))
                     for p in products:
                         pid = p.get("productId", "?")
@@ -2378,7 +2397,7 @@ Message "Uninstalling {data['name']}..."
             )
             if rc2 == 0 and out2:
                 try:
-                    hosts = json.loads(out2)
+                    hosts = self._parse_json(out2) or []
                     if hosts:
                         last = hosts[0].get("lastSeen", "unknown")
                         self.after(0, lambda l=last: self._log_to(self.client_output, f"\nLast seen: {l}", "info"))
@@ -2394,7 +2413,7 @@ Message "Uninstalling {data['name']}..."
         def on_done(out, err, rc):
             if rc == 0 and out:
                 try:
-                    failed = json.loads(out)
+                    failed = self._parse_json(out) or []
                     if not failed:
                         self._log_to(self.client_output, "\nNo failed installations found!", "ok")
                         return
