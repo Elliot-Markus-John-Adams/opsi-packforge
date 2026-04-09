@@ -337,6 +337,11 @@ class OPSIPackForge(tk.Tk):
             btn.set_active(False)
         self.pages[page_name].pack(fill="both", expand=True)
         self.nav_buttons[page_name].set_active(True)
+        # Auto-load data when navigating to a page
+        if page_name == "dashboard":
+            self._refresh_dashboard()
+        elif page_name == "wakeonlan" and not self.wol_clients:
+            self._refresh_wol_clients()
 
     # ══════════════════════════════════════════════════════════════════════════
     # HELPERS
@@ -2071,8 +2076,29 @@ Message "Uninstalling {data['name']}..."
 
     def _wol_auto_tick(self):
         if self.wol_auto_refresh:
-            self._refresh_wol_clients()
-            self.after(10000, self._wol_auto_tick)
+            # Only refresh reachability status, don't reload the full client list
+            if self.wol_clients:
+                self._refresh_wol_status_only()
+            else:
+                self._refresh_wol_clients()
+            self.after(15000, self._wol_auto_tick)
+
+    def _refresh_wol_status_only(self):
+        """Refresh just online/offline status without reloading the client list."""
+        def fetch_status():
+            reach_out, _, _ = self._ssh_cmd(
+                """opsi-cli --output-format json jsonrpc execute hostControlSafe_reachable '["*"]' 2>/dev/null""",
+                timeout=120
+            )
+            reachable = {}
+            if reach_out:
+                try:
+                    reachable = self._parse_json(reach_out) or {}
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            if reachable:
+                self.after(0, lambda r=reachable: self._update_wol_status(r))
+        threading.Thread(target=fetch_status, daemon=True).start()
 
     def _get_selected_client_ids(self):
         return [cid for cid, var in self.wol_client_vars.items() if var.get()]
