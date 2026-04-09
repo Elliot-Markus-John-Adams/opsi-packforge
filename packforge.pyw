@@ -907,19 +907,41 @@ Message "Uninstalling {data['name']}..."
             # Make package
             overwrite_choice = self.overwrite_var.get()
             if overwrite_choice == "Overwrite":
-                makepackage_cmd = f"cd /var/lib/opsi/workbench && echo O | opsi-makepackage {pkg_folder}"
+                makepackage_cmd = f"cd /var/lib/opsi/workbench && opsi-makepackage --keep-versions {pkg_folder}"
             elif overwrite_choice == "New version":
-                makepackage_cmd = f"cd /var/lib/opsi/workbench && echo N | opsi-makepackage {pkg_folder}"
+                # Find current highest package-version on server and increment
+                find_cmd = f"ls /var/lib/opsi/workbench/{data['id']}_{data['version']}-*.opsi 2>/dev/null | sort -V | tail -1"
+                find_result = subprocess.run(
+                    ["ssh", f"{user}@{server}", find_cmd],
+                    capture_output=True, text=True
+                )
+                release = 2
+                if find_result.stdout.strip():
+                    try:
+                        existing = find_result.stdout.strip().rsplit("-", 1)[-1].split(".opsi")[0]
+                        release = int(existing) + 1
+                    except (ValueError, IndexError):
+                        pass
+                makepackage_cmd = f"cd /var/lib/opsi/workbench && opsi-makepackage --product-version {data['version']} --package-version {release} {pkg_folder}"
             else:
-                makepackage_cmd = f"cd /var/lib/opsi/workbench && echo C | opsi-makepackage {pkg_folder}"
+                # Check if package exists first, abort if it does
+                check_cmd = f"ls /var/lib/opsi/workbench/{pkg_folder}-*.opsi 2>/dev/null"
+                check = subprocess.run(
+                    ["ssh", f"{user}@{server}", check_cmd],
+                    capture_output=True, text=True
+                )
+                if check.stdout.strip():
+                    self._log("[ABORTED] Package already exists on server", "warning")
+                    return
+                makepackage_cmd = f"cd /var/lib/opsi/workbench && opsi-makepackage {pkg_folder}"
 
             result = subprocess.run(
                 ["ssh", f"{user}@{server}", makepackage_cmd],
                 capture_output=True, text=True
             )
             self._log(result.stdout, "")
-            if overwrite_choice == "Abort" and "already exists" in (result.stdout + result.stderr):
-                self._log("[ABORTED] Package already exists on server", "warning")
+            if result.returncode != 0:
+                self._log(f"[ERROR] {result.stderr}", "error")
                 return
 
             # Install
