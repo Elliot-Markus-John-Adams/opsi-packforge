@@ -1756,10 +1756,13 @@ Message "Uninstalling {data['name']}..."
                 self.after(0, lambda: self._pkg_log("[OK] Files copied", "ok"))
 
                 overwrite_choice = self.overwrite_var.get()
+                wb = "/var/lib/opsi/workbench"
                 if overwrite_choice == "Overwrite":
-                    makepackage_cmd = f"cd /var/lib/opsi/workbench && opsi-makepackage --keep-versions {pkg_folder}"
+                    # Remove old .opsi file first, then build fresh
+                    self._ssh_cmd(f"rm -f {wb}/{data['id']}_{data['version']}-*.opsi 2>/dev/null")
+                    makepackage_cmd = f"cd {wb} && opsi-makepackage {pkg_folder} 2>&1 | cat"
                 elif overwrite_choice == "New version":
-                    find_cmd = f"ls /var/lib/opsi/workbench/{data['id']}_{data['version']}-*.opsi 2>/dev/null | sort -V | tail -1"
+                    find_cmd = f"ls {wb}/{data['id']}_{data['version']}-*.opsi 2>/dev/null | sort -V | tail -1"
                     find_out, _, _ = self._ssh_cmd(find_cmd)
                     release = 2
                     if find_out:
@@ -1768,27 +1771,40 @@ Message "Uninstalling {data['name']}..."
                             release = int(existing) + 1
                         except (ValueError, IndexError):
                             pass
-                    makepackage_cmd = f"cd /var/lib/opsi/workbench && opsi-makepackage --product-version {data['version']} --package-version {release} {pkg_folder}"
+                    makepackage_cmd = f"cd {wb} && opsi-makepackage --product-version {data['version']} --package-version {release} {pkg_folder} 2>&1 | cat"
                 else:
-                    check_out, _, _ = self._ssh_cmd(f"ls /var/lib/opsi/workbench/{pkg_folder}-*.opsi 2>/dev/null")
+                    check_out, _, _ = self._ssh_cmd(f"ls {wb}/{pkg_folder}-*.opsi 2>/dev/null")
                     if check_out:
                         self.after(0, lambda: self._pkg_log("[ABORTED] Package already exists on server", "warn"))
                         return
-                    makepackage_cmd = f"cd /var/lib/opsi/workbench && opsi-makepackage {pkg_folder}"
+                    makepackage_cmd = f"cd {wb} && opsi-makepackage {pkg_folder} 2>&1 | cat"
 
+                self.after(0, lambda: self._pkg_log("Building .opsi package...", "info"))
                 out, err, rc = self._ssh_cmd(makepackage_cmd, timeout=120)
+                # Strip Rich markup from output
                 if out:
-                    self.after(0, lambda o=out: self._pkg_log(o, ""))
+                    clean = re.sub(r'\[/?[a-zA-Z_]+\]', '', out)
+                    clean = re.sub(r'\x1b\[[0-9;]*[a-zA-Z]', '', clean)
+                    self.after(0, lambda o=clean: self._pkg_log(o, ""))
                 if rc != 0:
                     self.after(0, lambda e=err: self._pkg_log(f"[ERROR] {e}", "error"))
                     return
 
+                # Find the actual .opsi file created
+                opsi_file_out, _, _ = self._ssh_cmd(f"ls -t {wb}/{data['id']}*.opsi 2>/dev/null | head -1")
+                if not opsi_file_out:
+                    self.after(0, lambda: self._pkg_log("[ERROR] No .opsi file found after build", "error"))
+                    return
+
+                self.after(0, lambda: self._pkg_log("Installing package...", "info"))
                 out, err, rc = self._ssh_cmd(
-                    f"opsi-cli package install /var/lib/opsi/workbench/{pkg_folder}-*.opsi 2>&1",
+                    f"TERM=dumb opsi-cli package install {opsi_file_out.strip()} 2>&1",
                     timeout=120
                 )
                 if out:
-                    self.after(0, lambda o=out: self._pkg_log(o, ""))
+                    clean = re.sub(r'\[/?[a-zA-Z_]+\]', '', out)
+                    clean = re.sub(r'\x1b\[[0-9;]*[a-zA-Z]', '', clean)
+                    self.after(0, lambda o=clean: self._pkg_log(o, ""))
                 if rc != 0:
                     self.after(0, lambda e=err: self._pkg_log(f"[ERROR] {e}", "error"))
                     return
@@ -2106,14 +2122,49 @@ Message "Uninstalling {data['name']}..."
     def _get_selected_client_ids(self):
         return [cid for cid, var in self.wol_client_vars.items() if var.get()]
 
+    def _wol_start_monitoring(self):
+        """Start continuous reachability monitoring in a background thread after WOL."""
+        if getattr(self, '_wol_monitoring', False):
+            return  # Already monitoring
+        self._wol_monitoring = True
+        self._wol_log("Monitoring clients coming online...", "info")
+
+        def monitor_loop():
+            for i in range(12):  # Check every 10s for 2 minutes
+                if not self._wol_monitoring:
+                    break
+                import time
+                time.sleep(10)
+                if not self._wol_monitoring:
+                    break
+                reach_out, _, _ = self._ssh_cmd(
+                    """opsi-cli --output-format json jsonrpc execute hostControlSafe_reachable '["*"]' 2>/dev/null""",
+                    timeout=120
+                )
+                reachable = {}
+                if reach_out:
+                    try:
+                        reachable = self._parse_json(reach_out) or {}
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+                if reachable:
+                    online = sum(1 for v in reachable.values()
+                                 if v is True or (isinstance(v, dict) and v.get("result") is True))
+                    self.after(0, lambda r=reachable, o=online: (
+                        self._update_wol_status(r),
+                    ))
+            self._wol_monitoring = False
+            self.after(0, lambda: self._wol_log("Monitoring stopped", "info"))
+
+        threading.Thread(target=monitor_loop, daemon=True).start()
+
     def _wol_wake_all(self):
         self._wol_log("Waking ALL clients via OPSI...", "info")
-        self._ssh_bg(
-            """opsi-cli jsonrpc execute hostControlSafe_start '["*"]'""",
-            lambda out, err, rc: self._wol_log(
-                "[OK] Wake-all command sent" if rc == 0 else f"[ERROR] {err}", "ok" if rc == 0 else "error"
-            )
-        )
+        def on_done(out, err, rc):
+            self._wol_log("[OK] Wake-all command sent" if rc == 0 else f"[ERROR] {err}", "ok" if rc == 0 else "error")
+            if rc == 0:
+                self._wol_start_monitoring()
+        self._ssh_bg("""opsi-cli jsonrpc execute hostControlSafe_start '["*"]'""", on_done)
 
     def _wol_wake_group(self):
         group = self.wol_group_var.get()
@@ -2148,6 +2199,8 @@ Message "Uninstalling {data['name']}..."
                     f"[OK] Wake sent to {count} clients in '{group}'" if rc2 == 0 else f"[ERROR] {err2}",
                     "ok" if rc2 == 0 else "error"
                 ))
+                if rc2 == 0:
+                    self.after(0, lambda: self._wol_start_monitoring())
             except json.JSONDecodeError:
                 self.after(0, lambda: self._wol_log("[ERROR] Could not parse group members", "error"))
 
@@ -2160,12 +2213,15 @@ Message "Uninstalling {data['name']}..."
             return
         self._wol_log(f"Waking {len(selected)} selected client(s)...", "info")
         ids_json = json.dumps(selected)
-        self._ssh_bg(
-            f"""opsi-cli jsonrpc execute hostControlSafe_start '{ids_json}'""",
-            lambda out, err, rc: self._wol_log(
+        def on_done(out, err, rc):
+            self._wol_log(
                 f"[OK] Wake sent to {len(selected)} client(s)" if rc == 0 else f"[ERROR] {err}",
                 "ok" if rc == 0 else "error"
             )
+            if rc == 0:
+                self._wol_start_monitoring()
+        self._ssh_bg(
+            f"""opsi-cli jsonrpc execute hostControlSafe_start '{ids_json}'""", on_done
         )
 
     def _wol_wake_single(self):
