@@ -100,8 +100,9 @@ class ModernButton(tk.Canvas):
         self.create_rounded_rect(2, 2, self.width-2, self.height-2, r, fill=bg, outline="")
         self.create_text(self.width//2, self.height//2, text=self.text,
                         fill=self.fg_color, font=(FONT, 10, "bold"))
-        # Bind click to all canvas items so clicks on text/rect also work
-        self.tag_bind("all", "<Button-1>", lambda _: self._click())
+        # Bind click on every drawn item so clicks anywhere on the button work
+        for item_id in self.find_all():
+            self.tag_bind(item_id, "<Button-1>", lambda _: self._click())
 
     def create_rounded_rect(self, x1, y1, x2, y2, r, **kwargs):
         points = [
@@ -392,22 +393,26 @@ class OPSIPackForge(tk.Tk):
         server = self._get_server()
         user = self._get_user()
         password = self._get_password()
+        hide_kwargs = self._subprocess_kwargs(hide=True)
 
         try:
             if password and self._has_plink():
-                # plink: password auth, fully hidden, no TTY needed
                 args = ["plink", "-ssh", "-batch", "-pw", password,
                         f"{user}@{server}", cmd]
                 result = subprocess.run(
                     args, capture_output=True, text=True, timeout=timeout,
-                    **self._subprocess_kwargs(hide=True)
+                    **hide_kwargs
                 )
-            elif password and os.name == "nt":
-                # Windows SSH with password: create askpass script
+            elif password:
+                # Use SSH_ASKPASS to pass password without a visible window
                 import tempfile
-                askpass_path = os.path.join(tempfile.gettempdir(), "opsi_askpass.bat")
+                askpass_path = os.path.join(tempfile.gettempdir(), "opsi_askpass.bat" if os.name == "nt" else "opsi_askpass.sh")
                 with open(askpass_path, "w") as f:
-                    f.write(f"@echo {password}\n")
+                    if os.name == "nt":
+                        f.write(f"@echo {password}\n")
+                    else:
+                        f.write(f"#!/bin/sh\necho '{password}'\n")
+                        os.chmod(askpass_path, 0o700)
                 env = os.environ.copy()
                 env["SSH_ASKPASS"] = askpass_path
                 env["SSH_ASKPASS_REQUIRE"] = "force"
@@ -416,31 +421,20 @@ class OPSIPackForge(tk.Tk):
                         f"{user}@{server}", cmd]
                 result = subprocess.run(
                     args, capture_output=True, text=True, timeout=timeout,
-                    stdin=subprocess.DEVNULL, env=env,
-                    **self._subprocess_kwargs(hide=True)
+                    stdin=subprocess.DEVNULL, env=env, **hide_kwargs
                 )
                 try:
                     os.remove(askpass_path)
                 except OSError:
                     pass
             else:
-                # No password: key-based auth or let SSH prompt (one window)
-                has_keys = os.path.exists(os.path.expanduser("~/.ssh/id_rsa")) or \
-                           os.path.exists(os.path.expanduser("~/.ssh/id_ed25519"))
-                if has_keys:
-                    args = ["ssh", "-o", "ConnectTimeout=5", "-o", "StrictHostKeyChecking=no",
-                            "-o", "BatchMode=yes", f"{user}@{server}", cmd]
-                    result = subprocess.run(
-                        args, capture_output=True, text=True, timeout=timeout,
-                        **self._subprocess_kwargs(hide=True)
-                    )
-                else:
-                    # No keys, no password — let SSH prompt visibly (single window)
-                    args = ["ssh", "-o", "ConnectTimeout=5", "-o", "StrictHostKeyChecking=no",
-                            f"{user}@{server}", cmd]
-                    result = subprocess.run(
-                        args, capture_output=True, text=True, timeout=timeout
-                    )
+                # No password — always use BatchMode to prevent any visible prompts
+                args = ["ssh", "-o", "ConnectTimeout=5", "-o", "StrictHostKeyChecking=no",
+                        "-o", "BatchMode=yes", f"{user}@{server}", cmd]
+                result = subprocess.run(
+                    args, capture_output=True, text=True, timeout=timeout,
+                    **hide_kwargs
+                )
 
             return result.stdout.strip(), result.stderr.strip(), result.returncode
         except subprocess.TimeoutExpired:
@@ -458,11 +452,19 @@ class OPSIPackForge(tk.Tk):
         try:
             if password and self._has_plink():
                 args = ["pscp", "-r", "-batch", "-pw", password, local_path, dest]
-            elif password and os.name == "nt":
+                result = subprocess.run(
+                    args, capture_output=True, text=True, timeout=timeout,
+                    **self._subprocess_kwargs(hide=True)
+                )
+            elif password:
                 import tempfile
-                askpass_path = os.path.join(tempfile.gettempdir(), "opsi_askpass.bat")
+                askpass_path = os.path.join(tempfile.gettempdir(), "opsi_askpass.bat" if os.name == "nt" else "opsi_askpass.sh")
                 with open(askpass_path, "w") as f:
-                    f.write(f"@echo {password}\n")
+                    if os.name == "nt":
+                        f.write(f"@echo {password}\n")
+                    else:
+                        f.write(f"#!/bin/sh\necho '{password}'\n")
+                        os.chmod(askpass_path, 0o700)
                 env = os.environ.copy()
                 env["SSH_ASKPASS"] = askpass_path
                 env["SSH_ASKPASS_REQUIRE"] = "force"
@@ -477,14 +479,12 @@ class OPSIPackForge(tk.Tk):
                     os.remove(askpass_path)
                 except OSError:
                     pass
-                return result.stdout.strip(), result.stderr.strip(), result.returncode
             else:
-                args = ["scp", "-r", local_path, dest]
-
-            result = subprocess.run(
-                args, capture_output=True, text=True, timeout=timeout,
-                **self._subprocess_kwargs(hide=True)
-            )
+                result = subprocess.run(
+                    ["scp", "-o", "BatchMode=yes", "-r", local_path, dest],
+                    capture_output=True, text=True, timeout=timeout,
+                    **self._subprocess_kwargs(hide=True)
+                )
             return result.stdout.strip(), result.stderr.strip(), result.returncode
         except subprocess.TimeoutExpired:
             return "", "Timeout", -1
@@ -1411,8 +1411,9 @@ class OPSIPackForge(tk.Tk):
         self.svc_grid.pack(fill="x", padx=20, pady=(0, 20))
 
         self.svc_labels = {}
-        services = ["opsiconfd", "smbd", "isc-dhcp-server", "named",
-                    "apache2", "mysql", "tftpd-hpa"]
+        services = ["opsiconfd", "opsipxeconfd", "smbd", "isc-dhcp-server",
+                    "named", "apache2", "mysql", "redis", "tftpd-hpa",
+                    "cups", "grafana-server", "samba-ad-dc"]
         for i, svc in enumerate(services):
             row_frame = tk.Frame(self.svc_grid, bg=CARD)
             row_frame.grid(row=i // 4, column=i % 4, padx=(0, 24), pady=4, sticky="w")
@@ -1783,7 +1784,7 @@ Message "Uninstalling {data['name']}..."
                     return
 
                 out, err, rc = self._ssh_cmd(
-                    f"TERM=dumb opsi-package-manager -i /var/lib/opsi/workbench/{pkg_folder}-*.opsi 2>&1 | cat",
+                    f"opsi-cli package install /var/lib/opsi/workbench/{pkg_folder}-*.opsi 2>&1",
                     timeout=120
                 )
                 if out:
@@ -1836,7 +1837,8 @@ Message "Uninstalling {data['name']}..."
                     raise Exception(f"SCP failed: {err}")
                 self.after(0, lambda: self._pkg_log("[OK] File uploaded", "ok"))
 
-                out, err, rc = self._ssh_cmd(f"TERM=dumb opsi-package-manager {flag} -i {remote_path} 2>&1 | cat", timeout=120)
+                install_flag = "--setup-where-installed" if flag == "-S" else "--update-where-installed" if flag == "-U" else ""
+                out, err, rc = self._ssh_cmd(f"opsi-cli package install {install_flag} {remote_path} 2>&1".strip(), timeout=120)
                 if out:
                     self.after(0, lambda o=out: self._pkg_log(o, ""))
                 if rc != 0:
@@ -1895,9 +1897,8 @@ Message "Uninstalling {data['name']}..."
 
         def do_remove():
             for pid in product_ids:
-                flag = "--purge" if purge else "-r"
-                depot = "-d ALL" if all_depots else ""
-                cmd = f"TERM=dumb opsi-package-manager {flag} {depot} {pid} 2>&1 | cat".strip()
+                depot_flag = "--depots all" if all_depots else ""
+                cmd = f"opsi-cli package uninstall {depot_flag} {pid} 2>&1".strip()
                 self.after(0, lambda c=cmd: self._pkg_log(f"Running: {c}", "info"))
 
                 out, err, rc = self._ssh_cmd(cmd, timeout=60)
@@ -2293,16 +2294,31 @@ Message "Uninstalling {data['name']}..."
             self._show_diag_tab("health")
 
         def on_done(out, err, rc):
-            if out:
-                self._log_to(self.health_output, out, "")
-            if err:
-                self._log_to(self.health_output, err, "error")
-            if rc == 0:
+            # Try to parse JSON output first
+            data = self._parse_json(out) if out else None
+            if data and isinstance(data, (list, dict)):
+                items = data if isinstance(data, list) else data.values() if isinstance(data, dict) else []
+                for item in items:
+                    if isinstance(item, dict):
+                        check_id = item.get("check_id", item.get("id", ""))
+                        status = item.get("check_status", item.get("status", ""))
+                        msg = item.get("message", item.get("description", ""))
+                        tag = "ok" if status in ("ok", "passed", "success") else ("warn" if status == "warning" else "error")
+                        self._log_to(self.health_output, f"[{status.upper()}] {check_id}: {msg}", tag)
+                    elif isinstance(item, str):
+                        self._log_to(self.health_output, item, "")
+                self._log_to(self.health_output, "\nHealth check complete", "ok")
+            elif out:
+                # Strip any remaining ANSI codes in Python
+                import re as _re
+                clean = _re.sub(r'\x1b\[[0-9;]*[a-zA-Z]', '', out)
+                clean = _re.sub(r'\x1b\[', '', clean)
+                self._log_to(self.health_output, clean, "")
                 self._log_to(self.health_output, "\nHealth check complete", "ok")
             else:
-                self._log_to(self.health_output, "\nHealth check failed or not available", "error")
+                self._log_to(self.health_output, f"Health check failed: {err}", "error")
 
-        self._ssh_bg("opsi-cli --no-color support health-check 2>&1 || opsi-cli support health-check 2>&1 | sed 's/\\x1b\\[[0-9;]*m//g' || opsiconfd diagnostic 2>&1", on_done, timeout=60)
+        self._ssh_bg("opsi-cli --output-format json support health-check 2>/dev/null || TERM=dumb opsi-cli support health-check 2>&1", on_done, timeout=60)
 
         # Run quick checks in parallel
         self._run_quick_health_checks()
@@ -2483,45 +2499,48 @@ Message "Uninstalling {data['name']}..."
             self.paedml_checks[key]["detail"].configure(text="Checking...")
 
         checks = [
-            ("time_sync", "timedatectl show --property=NTPSynchronized --value 2>/dev/null",
-             lambda o, e, rc: ("yes" in o.lower(), "Synced" if "yes" in o.lower() else "NOT synced")),
+            ("time_sync", "timedatectl show --property=NTPSynchronized --value 2>&1",
+             lambda o, e, rc: ("yes" in o.lower(), "Synced" if "yes" in o.lower() else f"NOT synced: {(o+e).strip()}")),
 
-            ("disk_var", "df /var --output=pcent 2>/dev/null | tail -1",
+            ("disk_var", "df /var --output=pcent 2>&1 | tail -1",
              lambda o, e, rc: (int(re.search(r'(\d+)', o).group(1)) < 90 if re.search(r'(\d+)', o) else False,
-                              o.strip())),
+                              o.strip() if o.strip() else f"Error: {e}")),
 
-            ("disk_srv", "df /srv --output=pcent 2>/dev/null | tail -1",
+            ("disk_srv", "df /srv --output=pcent 2>&1 | tail -1",
              lambda o, e, rc: (int(re.search(r'(\d+)', o).group(1)) < 90 if re.search(r'(\d+)', o) else False,
-                              o.strip())),
+                              o.strip() if o.strip() else f"Error: {e}")),
 
-            ("cert_opsi", "openssl s_client -connect localhost:4447 </dev/null 2>/dev/null | openssl x509 -checkend 2592000 -noout 2>/dev/null",
-             lambda o, e, rc: (rc == 0, "Valid >30d" if rc == 0 else "Expiring soon!")),
+            ("cert_opsi", "openssl s_client -connect localhost:4447 </dev/null 2>/dev/null | openssl x509 -checkend 2592000 -noout 2>&1",
+             lambda o, e, rc: (rc == 0, "Valid >30d" if rc == 0 else f"Expiring or error: {(o+e).strip()}")),
 
-            ("dns_forward", "dig @localhost $(hostname -d 2>/dev/null || echo localhost) SOA +short 2>/dev/null | head -1",
-             lambda o, e, rc: (bool(o.strip()), o.strip()[:50] if o.strip() else "No result")),
+            ("dns_forward", "dig @localhost $(hostname -d 2>/dev/null || echo localhost) SOA +short 2>&1 | head -3",
+             lambda o, e, rc: (bool(o.strip()) and "error" not in o.lower(), o.strip()[:80] if o.strip() else f"No result: {e}")),
 
-            ("dns_reverse", "dig @localhost -x $(hostname -I 2>/dev/null | awk '{print $1}') +short 2>/dev/null | head -1",
-             lambda o, e, rc: (bool(o.strip()), o.strip()[:50] if o.strip() else "No result")),
+            ("dns_reverse", "dig @localhost -x $(hostname -I 2>/dev/null | awk '{print $1}') +short 2>&1 | head -3",
+             lambda o, e, rc: (bool(o.strip()) and "error" not in o.lower(), o.strip()[:80] if o.strip() else f"No result: {e}")),
 
-            ("dhcp_config", "dhcpd -t -cf /etc/dhcp/dhcpd.conf 2>&1 | tail -1",
-             lambda o, e, rc: (rc == 0, "Config OK" if rc == 0 else (o + e)[:50])),
+            ("dhcp_config", "dhcpd -t -cf /etc/dhcp/dhcpd.conf 2>&1 | tail -3",
+             lambda o, e, rc: (rc == 0, "Config OK" if rc == 0 else f"Error: {(o+e).strip()[:120]}")),
 
-            ("samba_ad", "samba-tool domain level show 2>&1 | head -1",
-             lambda o, e, rc: (rc == 0 and "error" not in o.lower(), o.strip()[:50] if rc == 0 else "Error")),
+            ("samba_ad", "samba-tool domain level show 2>&1 | head -5",
+             lambda o, e, rc: (rc == 0 and "error" not in o.lower() and "fatal" not in o.lower(),
+                              (o+e).strip()[:120] if (o+e).strip() else "No output")),
 
             ("domain_join", "net ads testjoin 2>&1",
-             lambda o, e, rc: ("ok" in (o + e).lower(), (o + e).strip()[:50])),
+             lambda o, e, rc: ("ok" in (o+e).lower() and "error" not in (o+e).lower(),
+                              (o+e).strip()[:120])),
 
-            ("sophomorix", "sophomorix-check 2>&1 | tail -3",
-             lambda o, e, rc: (rc == 0 and "error" not in o.lower(), "OK" if rc == 0 and "error" not in o.lower() else (o + e).strip()[:50])),
+            ("sophomorix", "sophomorix-check 2>&1 | tail -5",
+             lambda o, e, rc: (rc == 0 and "error" not in o.lower() and "fatal" not in o.lower(),
+                              (o+e).strip()[:120] if rc != 0 or "error" in o.lower() else "OK")),
         ]
 
         for key, cmd, evaluator in checks:
-            def on_result(out, err, rc, k=key, ev=evaluator):
+            def on_result(out, err, rc, k=key, ev=evaluator, c=cmd):
                 try:
                     passed, detail = ev(out, err, rc)
-                except Exception:
-                    passed, detail = False, "Parse error"
+                except Exception as ex:
+                    passed, detail = False, f"Check error: {ex}"
                 self.paedml_checks[k]["dot"].configure(
                     text="●", fg=SUCCESS if passed else ERROR)
                 self.paedml_checks[k]["detail"].configure(
@@ -2529,6 +2548,11 @@ Message "Uninstalling {data['name']}..."
                 status = "PASS" if passed else "FAIL"
                 tag = "ok" if passed else "error"
                 self._log_to(self.paedml_output, f"[{status}] {k}: {detail}", tag)
+                # Show full output for failed checks
+                if not passed and (out or err):
+                    full = (out + "\n" + err).strip()
+                    if full and full != str(detail):
+                        self._log_to(self.paedml_output, f"  Full output: {full[:300]}", "warn")
 
             self._ssh_bg(cmd, on_result)
 
