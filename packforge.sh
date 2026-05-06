@@ -201,6 +201,158 @@ do_remove() {
     fi
 }
 
+do_deploy() {
+    echo ""
+    echo "--- Deploy Packages to Clients ---"
+    echo ""
+
+    if ! command -v opsi-admin > /dev/null 2>&1; then
+        echo "ERROR: opsi-admin not found."
+        return
+    fi
+
+    if ! command -v whiptail > /dev/null 2>&1; then
+        echo "ERROR: whiptail not found."
+        return
+    fi
+
+    # Get package list
+    echo "Loading packages..."
+    pkg_list=$(LC_ALL=C opsi-package-manager -l 2>/dev/null | awk '/^   [a-z0-9]/ {print $1}')
+
+    if [ -z "$pkg_list" ]; then
+        echo "No packages found."
+        return
+    fi
+
+    # Build whiptail checklist for packages
+    pkg_count=$(echo "$pkg_list" | wc -l)
+    list_height=$pkg_count
+    if [ "$list_height" -gt 20 ]; then list_height=20; fi
+    height=$((list_height + 8))
+
+    set --
+    for pkg in $pkg_list; do
+        set -- "$@" "$pkg" "" OFF
+    done
+
+    selected_pkgs=$(whiptail --checklist "Select packages (SPACE=select, ENTER=confirm)" $height 60 $list_height "$@" 3>&1 1>&2 2>&3)
+
+    if [ $? -ne 0 ] || [ -z "$selected_pkgs" ]; then
+        echo "No packages selected."
+        return
+    fi
+
+    selected_pkgs=$(echo "$selected_pkgs" | tr -d '"')
+    echo ""
+    echo "Selected packages:"
+    for pkg in $selected_pkgs; do
+        echo "  $pkg"
+    done
+
+    # Client selection method
+    echo ""
+    echo "  [1] All clients"
+    echo "  [2] Select specific clients"
+    echo "  [3] Filter by pattern"
+    echo ""
+    read -p "Client selection: " client_method
+
+    # Get client list
+    echo "Loading clients..."
+    client_list=$(LC_ALL=C opsi-admin -d method host_getIdents str '{"type":"OpsiClient"}' 2>/dev/null | tr -d '[]",' | tr ' ' '\n' | sed '/^$/d' | sort)
+
+    if [ -z "$client_list" ]; then
+        echo "No clients found."
+        return
+    fi
+
+    selected_clients=""
+
+    case "$client_method" in
+        1)
+            selected_clients="$client_list"
+            client_count=$(echo "$client_list" | wc -l)
+            echo "All $client_count clients selected."
+            ;;
+        2)
+            client_count=$(echo "$client_list" | wc -l)
+            clist_height=$client_count
+            if [ "$clist_height" -gt 20 ]; then clist_height=20; fi
+            cheight=$((clist_height + 8))
+
+            set --
+            for client in $client_list; do
+                set -- "$@" "$client" "" OFF
+            done
+
+            selected_clients=$(whiptail --checklist "Select clients (SPACE=select, ENTER=confirm)" $cheight 70 $clist_height "$@" 3>&1 1>&2 2>&3)
+
+            if [ $? -ne 0 ] || [ -z "$selected_clients" ]; then
+                echo "No clients selected."
+                return
+            fi
+            selected_clients=$(echo "$selected_clients" | tr -d '"')
+            ;;
+        3)
+            read -p "Pattern: " pattern
+            selected_clients=$(echo "$client_list" | grep -i "$pattern")
+            if [ -z "$selected_clients" ]; then
+                echo "No clients match pattern."
+                return
+            fi
+            echo "Matching clients:"
+            for c in $selected_clients; do
+                echo "  $c"
+            done
+            echo ""
+            read -p "Continue? (y/N): " confirm
+            if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
+                echo "Aborted."
+                return
+            fi
+            ;;
+        *)
+            echo "Invalid choice."
+            return
+            ;;
+    esac
+
+    if [ -z "$selected_clients" ]; then
+        echo "No clients selected."
+        return
+    fi
+
+    # Confirm
+    echo ""
+    pkg_num=0
+    for _ in $selected_pkgs; do pkg_num=$((pkg_num + 1)); done
+    client_num=0
+    for _ in $selected_clients; do client_num=$((client_num + 1)); done
+
+    echo "Deploy $pkg_num package(s) to $client_num client(s)?"
+    read -p "Proceed? (y/N): " proceed
+    if [ "$proceed" != "y" ] && [ "$proceed" != "Y" ]; then
+        echo "Aborted."
+        return
+    fi
+
+    # Set action request
+    echo ""
+    for pkg in $selected_pkgs; do
+        for client in $selected_clients; do
+            if LC_ALL=C opsi-admin -d method setProductActionRequest "$pkg" "$client" setup 2>/dev/null; then
+                echo "  OK: $pkg -> $client"
+            else
+                echo "  FAILED: $pkg -> $client"
+            fi
+        done
+    done
+
+    echo ""
+    echo "Deploy complete."
+}
+
 do_list() {
     echo ""
     echo "--- Installed OPSI Packages ---"
@@ -220,7 +372,8 @@ banner
 while true; do
     echo "  [1] Create package"
     echo "  [2] Remove package"
-    echo "  [3] List packages"
+    echo "  [3] Deploy to clients"
+    echo "  [4] List packages"
     echo "  [0] Exit"
     echo ""
     read -p "Select: " choice
@@ -228,7 +381,8 @@ while true; do
     case "$choice" in
         1) do_create ;;
         2) do_remove ;;
-        3) do_list ;;
+        3) do_deploy ;;
+        4) do_list ;;
         0) echo "Bye."; exit 0 ;;
         *) echo "Invalid choice." ;;
     esac
