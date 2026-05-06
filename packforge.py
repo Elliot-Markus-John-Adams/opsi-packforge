@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""OPSI PackForge CLI v4.0.0 — On-server OPSI administration tool.
+"""OPSI PackForge CLI v4.0.0 -- On-server OPSI administration tool.
 
 Run directly on an OPSI server. No external dependencies required.
+Python 3.5+ compatible.
 https://github.com/elliot-markus-john-adams/opsi-packforge
 """
 
@@ -70,25 +71,24 @@ class C:
 # ============================================================
 
 def ok(msg):
-    print(f"  {C.GREEN}\u2713{C.RESET} {msg}")
+    print("  {}\u2713{} {}".format(C.GREEN, C.RESET, msg))
 
 
 def err(msg):
-    print(f"  {C.RED}\u2717{C.RESET} {msg}")
+    print("  {}\u2717{} {}".format(C.RED, C.RESET, msg))
 
 
 def warn(msg):
-    print(f"  {C.YELLOW}!{C.RESET} {msg}")
+    print("  {}!{} {}".format(C.YELLOW, C.RESET, msg))
 
 
 def info(msg):
-    print(f"  {C.BLUE}\u2022{C.RESET} {msg}")
+    print("  {}\u2022{} {}".format(C.BLUE, C.RESET, msg))
 
 
 def header(title):
-    print(f"\n{C.BOLD}{C.CYAN}  {title}{C.RESET}")
-    line = "\u2500" * len(title)
-    print(f"  {line}")
+    print("\n{}{}  {}{}".format(C.BOLD, C.CYAN, title, C.RESET))
+    print("  {}".format("\u2500" * len(title)))
 
 
 def die(msg):
@@ -103,7 +103,6 @@ def table(rows, headers=None, indent=2):
     all_rows = ([headers] + list(rows)) if headers else list(rows)
     cols = len(all_rows[0])
     widths = [0] * cols
-    # Strip ANSI for width calculation
     ansi_re = re.compile(r"\033\[[0-9;]*[a-zA-Z]")
     for row in all_rows:
         for i, cell in enumerate(row):
@@ -128,7 +127,7 @@ def confirm(msg):
     if OPTS["yes"]:
         return True
     try:
-        answer = input(f"  {msg} [y/N] ").strip().lower()
+        answer = input("  {} [y/N] ".format(msg)).strip().lower()
         return answer in ("y", "yes")
     except (EOFError, KeyboardInterrupt):
         print()
@@ -152,23 +151,28 @@ class Spinner:
     def __enter__(self):
         if sys.stdout.isatty() and not OPTS["no_color"]:
             self.running = True
-            self.thread = threading.Thread(target=self._spin, daemon=True)
+            self.thread = threading.Thread(target=self._spin)
+            self.thread.daemon = True
             self.thread.start()
         else:
-            print(f"  {self.msg}...")
+            print("  {}...".format(self.msg))
         return self
 
     def __exit__(self, *_):
         self.running = False
         if self.thread:
             self.thread.join()
-            print(f"\r  {' ' * (len(self.msg) + 4)}\r", end="", flush=True)
+            blanks = " " * (len(self.msg) + 4)
+            print("\r  {}\r".format(blanks), end="", flush=True)
 
     def _spin(self):
         i = 0
         while self.running:
             ch = self.CHARS[i % len(self.CHARS)]
-            print(f"\r  {C.BLUE}{ch}{C.RESET} {self.msg}", end="", flush=True)
+            sys.stdout.write(
+                "\r  {}{}{} {}".format(C.BLUE, ch, C.RESET, self.msg)
+            )
+            sys.stdout.flush()
             i += 1
             time.sleep(0.08)
 
@@ -181,15 +185,17 @@ def run(cmd, timeout=30, check=False):
     """Run a local shell command. Returns (stdout, stderr, returncode)."""
     try:
         result = subprocess.run(
-            cmd, shell=True, capture_output=True, text=True, timeout=timeout,
+            cmd, shell=True,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            universal_newlines=True, timeout=timeout,
         )
         stdout = (result.stdout or "").strip()
         stderr = (result.stderr or "").strip()
         if check and result.returncode != 0:
-            die(f"Command failed: {cmd}\n    {stderr}")
+            die("Command failed: {}\n    {}".format(cmd, stderr))
         return stdout, stderr, result.returncode
     except subprocess.TimeoutExpired:
-        return "", f"Timed out after {timeout}s", -1
+        return "", "Timed out after {}s".format(timeout), -1
     except Exception as exc:
         return "", str(exc), -1
 
@@ -240,11 +246,11 @@ def opsi_jsonrpc(method, params="'[]'", filter_arg="'[]'", timeout=30):
     cli = detect_opsi_cli()
     if cli == "opsi-cli":
         cmd = (
-            f"opsi-cli --output-format json jsonrpc execute "
-            f"{method} {params} {filter_arg}"
+            "opsi-cli --output-format json jsonrpc execute "
+            "{} {} {}".format(method, params, filter_arg)
         )
     elif cli == "opsi-admin":
-        cmd = f"opsi-admin -d method {method} {params} {filter_arg}"
+        cmd = "opsi-admin -d method {} {} {}".format(method, params, filter_arg)
     else:
         return None
     return run_json(cmd, timeout=timeout)
@@ -261,10 +267,10 @@ def pick_one(items, prompt="Select", display=None):
         return None
     for i, item in enumerate(items, 1):
         label = display(item) if display else str(item)
-        print(f"  {C.DIM}{i:3d}{C.RESET}  {label}")
+        print("  {}{:3d}{}  {}".format(C.DIM, i, C.RESET, label))
     print()
     try:
-        choice = input(f"  {prompt} [1-{len(items)}, q]: ").strip()
+        choice = input("  {} [1-{}, q]: ".format(prompt, len(items))).strip()
     except (EOFError, KeyboardInterrupt):
         print()
         return None
@@ -290,10 +296,10 @@ def pick_many(items, prompt="Select", display=None):
         return []
     for i, item in enumerate(items, 1):
         label = display(item) if display else str(item)
-        print(f"  {C.DIM}{i:3d}{C.RESET}  {label}")
+        print("  {}{:3d}{}  {}".format(C.DIM, i, C.RESET, label))
     print()
     try:
-        choice = input(f"  {prompt} [numbers/ranges, 'all', q]: ").strip()
+        choice = input("  {} [numbers/ranges, 'all', q]: ".format(prompt)).strip()
     except (EOFError, KeyboardInterrupt):
         print()
         return []
@@ -333,21 +339,21 @@ def cmd_dashboard(args):
     # opsiconfd status
     stdout, _, rc = run("systemctl is-active opsiconfd 2>/dev/null")
     if rc == 0 and stdout == "active":
-        ok(f"opsiconfd {C.GREEN}active{C.RESET}")
+        ok("opsiconfd {}active{}".format(C.GREEN, C.RESET))
     else:
-        err(f"opsiconfd {C.RED}{stdout or 'inactive'}{C.RESET}")
+        err("opsiconfd {}{}{}".format(C.RED, stdout or "inactive", C.RESET))
 
     # Package count
     stdout, _, rc = run("opsi-package-manager -l 2>/dev/null | wc -l")
     pkg_count = stdout.strip() if rc == 0 else "?"
-    info(f"Packages installed: {C.BOLD}{pkg_count}{C.RESET}")
+    info("Packages installed: {}{}{}".format(C.BOLD, pkg_count, C.RESET))
 
     # Client count
     clients = opsi_jsonrpc(
         "host_getObjects", "'[]'", """'{"type":"OpsiClient"}'""",
     )
     client_count = len(clients) if clients else "?"
-    info(f"Clients registered: {C.BOLD}{client_count}{C.RESET}")
+    info("Clients registered: {}{}{}".format(C.BOLD, client_count, C.RESET))
 
     # Disk space
     stdout, _, rc = run(
@@ -357,7 +363,7 @@ def cmd_dashboard(args):
         parts = stdout.split()
         pct = parts[0] if parts else "?"
         avail = parts[1] if len(parts) > 1 else "?"
-        info(f"Disk: {C.BOLD}{pct}{C.RESET} used, {avail} available")
+        info("Disk: {}{}{} used, {} available".format(C.BOLD, pct, C.RESET, avail))
     else:
         warn("Disk info unavailable")
 
@@ -367,23 +373,25 @@ def cmd_dashboard(args):
     )
     fail_count = len(failed) if failed else 0
     if fail_count > 0:
-        warn(f"Failed deployments: {C.RED}{C.BOLD}{fail_count}{C.RESET}")
+        warn("Failed deployments: {}{}{}{}".format(
+            C.RED, C.BOLD, fail_count, C.RESET,
+        ))
     else:
-        ok(f"Failed deployments: {C.GREEN}0{C.RESET}")
+        ok("Failed deployments: {}0{}".format(C.GREEN, C.RESET))
 
     # Services
     print()
     header("Services")
     for svc in SERVICES:
-        stdout, _, rc = run(f"systemctl is-active {svc} 2>/dev/null")
+        stdout, _, rc = run("systemctl is-active {} 2>/dev/null".format(svc))
         if rc == 0 and stdout == "active":
             ok(svc)
         else:
             status = stdout if stdout else "not found"
             if status == "inactive":
-                warn(f"{svc} ({status})")
+                warn("{} ({})".format(svc, status))
             else:
-                err(f"{svc} ({status})")
+                err("{} ({})".format(svc, status))
 
 
 # ============================================================
@@ -406,8 +414,8 @@ def cmd_pkg_list(args):
         return
 
     for line in sorted(lines):
-        print(f"  {line}")
-    print(f"\n  {C.DIM}{len(lines)} package(s){C.RESET}")
+        print("  {}".format(line))
+    print("\n  {}{}  package(s){}".format(C.DIM, len(lines), C.RESET))
 
 
 def cmd_pkg_create(args):
@@ -420,7 +428,7 @@ def cmd_pkg_create(args):
     if not path:
         header("Workbench Packages")
         if not os.path.isdir(WORKBENCH):
-            die(f"Workbench not found: {WORKBENCH}")
+            die("Workbench not found: {}".format(WORKBENCH))
         dirs = sorted(
             d for d in os.listdir(WORKBENCH)
             if os.path.isdir(os.path.join(WORKBENCH, d))
@@ -434,43 +442,45 @@ def cmd_pkg_create(args):
         path = os.path.join(WORKBENCH, selected)
 
     if not os.path.isdir(path):
-        die(f"Directory not found: {path}")
+        die("Directory not found: {}".format(path))
     if not os.path.isdir(os.path.join(path, "OPSI")):
-        die(f"Not a valid OPSI package (no OPSI/ folder): {path}")
+        die("Not a valid OPSI package (no OPSI/ folder): {}".format(path))
 
     pkg_name = os.path.basename(os.path.normpath(path))
 
     if getattr(args, "keep_versions", False):
-        build_cmd = f"cd '{path}' && opsi-makepackage --keep-versions"
+        build_cmd = "cd '{}' && opsi-makepackage --keep-versions".format(path)
     elif getattr(args, "version", None):
-        build_cmd = f"cd '{path}' && opsi-makepackage --product-version {args.version}"
+        build_cmd = "cd '{}' && opsi-makepackage --product-version {}".format(
+            path, args.version,
+        )
         if getattr(args, "release", None):
-            build_cmd += f" --package-version {args.release}"
+            build_cmd += " --package-version {}".format(args.release)
     else:
-        build_cmd = f"cd '{path}' && opsi-makepackage"
+        build_cmd = "cd '{}' && opsi-makepackage".format(path)
 
-    info(f"Building {C.BOLD}{pkg_name}{C.RESET}...")
+    info("Building {}{}{}...".format(C.BOLD, pkg_name, C.RESET))
     with Spinner("Running opsi-makepackage"):
         stdout, stderr, rc = run(build_cmd, timeout=300)
 
     if rc != 0:
-        err(f"Build failed:\n    {stderr}")
+        err("Build failed:\n    {}".format(stderr))
         if stdout:
-            print(f"    {stdout}")
+            print("    {}".format(stdout))
         return
 
-    ok(f"Package built: {pkg_name}")
+    ok("Package built: {}".format(pkg_name))
     for line in (stdout or "").splitlines():
         if ".opsi" in line:
-            print(f"  {C.DIM}{line.strip()}{C.RESET}")
+            print("  {}{}{}".format(C.DIM, line.strip(), C.RESET))
 
-    if confirm(f"Install {pkg_name} to depot?"):
+    if confirm("Install {} to depot?".format(pkg_name)):
         opsi_file, _, _ = run(
-            f"ls -t '{WORKBENCH}'/{pkg_name}*.opsi 2>/dev/null | head -1",
+            "ls -t '{}'/{}_*.opsi 2>/dev/null | head -1".format(WORKBENCH, pkg_name),
         )
         if not opsi_file:
             opsi_file, _, _ = run(
-                f"ls -t '{path}'/{pkg_name}*.opsi 2>/dev/null | head -1",
+                "ls -t '{}'/{}_*.opsi 2>/dev/null | head -1".format(path, pkg_name),
             )
         if opsi_file:
             _pkg_install_file(opsi_file)
@@ -498,17 +508,17 @@ def _pkg_wizard():
             die("Invalid package ID. Use lowercase letters, numbers, hyphens.")
 
         version = input("  Version [1.0.0]: ").strip() or "1.0.0"
-        name = input(f"  Product Name [{pkg_id}]: ").strip() or pkg_id
+        name = input("  Product Name [{}]: ".format(pkg_id)).strip() or pkg_id
         description = input("  Description: ").strip()
 
-        print(f"\n  Installer types: msi, inno, nsis, exe, ps1, bat")
+        print("\n  Installer types: msi, inno, nsis, exe, ps1, bat")
         inst_type = input("  Installer type [exe]: ").strip().lower() or "exe"
         if inst_type not in silent_defaults:
-            warn(f"Unknown type '{inst_type}', defaulting to exe.")
+            warn("Unknown type '{}', defaulting to exe.".format(inst_type))
             inst_type = "exe"
 
         default_params = silent_defaults[inst_type]
-        silent = input(f"  Silent parameters [{default_params}]: ").strip()
+        silent = input("  Silent parameters [{}]: ".format(default_params)).strip()
         if not silent:
             silent = default_params
     except (EOFError, KeyboardInterrupt):
@@ -522,14 +532,14 @@ def _pkg_wizard():
     files_dir = os.path.join(client_dir, "files")
 
     if os.path.exists(pkg_dir):
-        if not confirm(f"Directory {pkg_dir} exists. Overwrite scripts?"):
+        if not confirm("Directory {} exists. Overwrite scripts?".format(pkg_dir)):
             return
 
     os.makedirs(opsi_dir, exist_ok=True)
     os.makedirs(files_dir, exist_ok=True)
 
     # control file
-    control = textwrap.dedent(f"""\
+    control = textwrap.dedent("""\
         [Package]
         version: 1
         depends:
@@ -552,7 +562,7 @@ def _pkg_wizard():
         onceScript:
         customScript:
         userLoginScript:
-    """)
+    """).format(pkg_id=pkg_id, name=name, description=description, version=version)
     with open(os.path.join(opsi_dir, "control"), "w") as fh:
         fh.write(control)
 
@@ -561,13 +571,13 @@ def _pkg_wizard():
         install_block = (
             "Winbatch_install\n\n"
             "[Winbatch_install]\n"
-            f'msiexec /i "%ScriptPath%\\files\\*.msi" {silent}'
+            'msiexec /i "%ScriptPath%\\files\\*.msi" {}'.format(silent)
         )
     elif inst_type in ("inno", "nsis", "exe"):
         install_block = (
             "Winbatch_install\n\n"
             "[Winbatch_install]\n"
-            f'"%ScriptPath%\\files\\*.exe" {silent}'
+            '"%ScriptPath%\\files\\*.exe" {}'.format(silent)
         )
     elif inst_type == "ps1":
         install_block = (
@@ -583,7 +593,7 @@ def _pkg_wizard():
             'call "%ScriptPath%\\files\\install.bat"'
         )
 
-    setup_script = textwrap.dedent(f"""\
+    setup_script = textwrap.dedent("""\
         [Actions]
         requiredWinstVersion >= "4.12"
         ScriptErrorMessages = false
@@ -594,12 +604,12 @@ def _pkg_wizard():
         Message "Installing " + $ProductId$ + " ..."
 
         {install_block}
-    """)
+    """).format(pkg_id=pkg_id, install_block=install_block)
     with open(os.path.join(client_dir, "setup.opsiscript"), "w") as fh:
         fh.write(setup_script)
 
     # uninstall script
-    uninstall_script = textwrap.dedent(f"""\
+    uninstall_script = textwrap.dedent("""\
         [Actions]
         requiredWinstVersion >= "4.12"
         ScriptErrorMessages = false
@@ -610,24 +620,26 @@ def _pkg_wizard():
         Message "Uninstalling " + $ProductId$ + " ..."
 
         comment "TODO: Add uninstall command"
-    """)
+    """).format(pkg_id=pkg_id)
     with open(os.path.join(client_dir, "uninstall.opsiscript"), "w") as fh:
         fh.write(uninstall_script)
 
-    ok(f"Package created at {pkg_dir}")
-    info(f"Place installer files in: {files_dir}/")
+    ok("Package created at {}".format(pkg_dir))
+    info("Place installer files in: {}/".format(files_dir))
     print()
 
     if confirm("Build package now?"):
         with Spinner("Running opsi-makepackage"):
             stdout, stderr, rc = run(
-                f"cd '{WORKBENCH}' && opsi-makepackage --keep-versions {pkg_id}",
+                "cd '{}' && opsi-makepackage --keep-versions {}".format(
+                    WORKBENCH, pkg_id,
+                ),
                 timeout=300,
             )
         if rc == 0:
             ok("Package built successfully.")
         else:
-            err(f"Build failed: {stderr}")
+            err("Build failed: {}".format(stderr))
 
 
 def cmd_pkg_install(args):
@@ -640,7 +652,7 @@ def cmd_pkg_install(args):
 def _pkg_install_file(filepath, setup=False, update=False):
     """Install an .opsi file."""
     if not os.path.isfile(filepath):
-        die(f"File not found: {filepath}")
+        die("File not found: {}".format(filepath))
 
     cli = detect_opsi_cli()
     if cli == "opsi-cli":
@@ -649,16 +661,16 @@ def _pkg_install_file(filepath, setup=False, update=False):
             cmd += " --setup-where-installed"
         elif update:
             cmd += " --update-where-installed"
-        cmd += f" '{filepath}'"
+        cmd += " '{}'".format(filepath)
     else:
         cmd = "opsi-package-manager -i"
         if setup:
             cmd += " -S"
         elif update:
             cmd += " -U"
-        cmd += f" '{filepath}'"
+        cmd += " '{}'".format(filepath)
 
-    info(f"Installing {C.BOLD}{os.path.basename(filepath)}{C.RESET}...")
+    info("Installing {}{}{}...".format(C.BOLD, os.path.basename(filepath), C.RESET))
     with Spinner("Installing package"):
         stdout, stderr, rc = run(cmd, timeout=600)
 
@@ -666,9 +678,9 @@ def _pkg_install_file(filepath, setup=False, update=False):
         ok("Package installed.")
         if stdout:
             for line in stdout.splitlines()[-3:]:
-                print(f"  {C.DIM}{line}{C.RESET}")
+                print("  {}{}{}".format(C.DIM, line, C.RESET))
     else:
-        err(f"Install failed: {stderr}")
+        err("Install failed: {}".format(stderr))
 
 
 def cmd_pkg_remove(args):
@@ -699,7 +711,7 @@ def cmd_pkg_remove(args):
 
 def _remove_one(product_id, depots_all=False):
     """Remove a single package."""
-    if not confirm(f"Remove {C.BOLD}{product_id}{C.RESET}?"):
+    if not confirm("Remove {}{}{}?".format(C.BOLD, product_id, C.RESET)):
         return
 
     cli = detect_opsi_cli()
@@ -707,20 +719,20 @@ def _remove_one(product_id, depots_all=False):
         cmd = "opsi-cli package uninstall"
         if depots_all:
             cmd += " --depots all"
-        cmd += f" {product_id}"
+        cmd += " " + product_id
     else:
         cmd = "opsi-package-manager -r"
         if depots_all:
             cmd += " --depots '*'"
-        cmd += f" {product_id}"
+        cmd += " " + product_id
 
-    with Spinner(f"Removing {product_id}"):
+    with Spinner("Removing {}".format(product_id)):
         _, stderr, rc = run(cmd, timeout=120)
 
     if rc == 0:
-        ok(f"Removed {product_id}")
+        ok("Removed {}".format(product_id))
     else:
-        err(f"Failed to remove {product_id}: {stderr}")
+        err("Failed to remove {}: {}".format(product_id, stderr))
 
 
 # ============================================================
@@ -776,15 +788,14 @@ def cmd_wol_list(args):
     online = sum(1 for c in clients if c["online"])
     rows = []
     for c in clients:
-        status = (
-            f"{C.GREEN}Online{C.RESET}"
-            if c["online"]
-            else f"{C.DIM}Offline{C.RESET}"
-        )
+        if c["online"]:
+            status = "{}Online{}".format(C.GREEN, C.RESET)
+        else:
+            status = "{}Offline{}".format(C.DIM, C.RESET)
         rows.append((c["id"], c["ip"] or "-", c["mac"] or "-", status))
 
     table(rows, headers=("Client ID", "IP", "MAC", "Status"))
-    print(f"\n  {C.DIM}{online}/{len(clients)} online{C.RESET}")
+    print("\n  {}{}/{} online{}".format(C.DIM, online, len(clients), C.RESET))
 
 
 def cmd_wol_wake(args):
@@ -802,7 +813,7 @@ def cmd_wol_wake(args):
         if rc == 0:
             ok("Wake signal sent to all clients.")
         else:
-            err(f"Failed: {stderr}")
+            err("Failed: {}".format(stderr))
         return
 
     group = getattr(args, "group", None)
@@ -826,7 +837,9 @@ def cmd_wol_wake(args):
     selected = pick_many(
         offline,
         prompt="Select clients to wake",
-        display=lambda c: f"{c['id']:<40} {c['ip'] or '-':<15} {c['mac'] or '-'}",
+        display=lambda c: "{:<40} {:<15} {}".format(
+            c["id"], c["ip"] or "-", c["mac"] or "-",
+        ),
     )
     if selected:
         _wol_send([c["id"] for c in selected])
@@ -836,15 +849,15 @@ def _wol_group(group_name):
     """Wake all clients in a host group."""
     members = opsi_jsonrpc(
         "objectToGroup_getObjects", "'[]'",
-        f"""'{{"groupType":"HostGroup","groupId":"{group_name}"}}'""",
+        """'{{"groupType":"HostGroup","groupId":"{}"}}'""".format(group_name),
         timeout=30,
     )
     if not members:
-        die(f"No members found in group '{group_name}'.")
+        die("No members found in group '{}'.".format(group_name))
     ids = [m.get("objectId", "") for m in members if m.get("objectId")]
     if not ids:
-        die(f"No client IDs in group '{group_name}'.")
-    info(f"Waking {len(ids)} client(s) in group '{group_name}'...")
+        die("No client IDs in group '{}'.".format(group_name))
+    info("Waking {} client(s) in group '{}'...".format(len(ids), group_name))
     _wol_send(ids)
 
 
@@ -853,52 +866,52 @@ def _wol_send(client_ids):
     ids_json = json.dumps(client_ids)
     cli = detect_opsi_cli()
     if cli == "opsi-cli":
-        cmd = f"opsi-cli jsonrpc execute hostControlSafe_start '{ids_json}'"
+        cmd = "opsi-cli jsonrpc execute hostControlSafe_start '{}'".format(ids_json)
     else:
-        cmd = f"opsi-admin -d method hostControlSafe_start '{ids_json}'"
+        cmd = "opsi-admin -d method hostControlSafe_start '{}'".format(ids_json)
     _, stderr, rc = run(cmd, timeout=30)
     if rc == 0:
-        ok(f"Wake signal sent to {len(client_ids)} client(s).")
+        ok("Wake signal sent to {} client(s).".format(len(client_ids)))
     else:
-        err(f"Failed: {stderr}")
+        err("Failed: {}".format(stderr))
 
 
 def cmd_wol_reboot(args):
     """Reboot selected clients."""
     if not args.clients:
         die("Specify client ID(s) to reboot.")
-    if not confirm(f"Reboot {len(args.clients)} client(s)?"):
+    if not confirm("Reboot {} client(s)?".format(len(args.clients))):
         return
     ids_json = json.dumps(args.clients)
     cli = detect_opsi_cli()
     if cli == "opsi-cli":
-        cmd = f"opsi-cli jsonrpc execute hostControlSafe_reboot '{ids_json}'"
+        cmd = "opsi-cli jsonrpc execute hostControlSafe_reboot '{}'".format(ids_json)
     else:
-        cmd = f"opsi-admin -d method hostControlSafe_reboot '{ids_json}'"
+        cmd = "opsi-admin -d method hostControlSafe_reboot '{}'".format(ids_json)
     _, stderr, rc = run(cmd, timeout=30)
     if rc == 0:
         ok("Reboot signal sent.")
     else:
-        err(f"Failed: {stderr}")
+        err("Failed: {}".format(stderr))
 
 
 def cmd_wol_shutdown(args):
     """Shut down selected clients."""
     if not args.clients:
         die("Specify client ID(s) to shut down.")
-    if not confirm(f"Shut down {len(args.clients)} client(s)?"):
+    if not confirm("Shut down {} client(s)?".format(len(args.clients))):
         return
     ids_json = json.dumps(args.clients)
     cli = detect_opsi_cli()
     if cli == "opsi-cli":
-        cmd = f"opsi-cli jsonrpc execute hostControlSafe_shutdown '{ids_json}'"
+        cmd = "opsi-cli jsonrpc execute hostControlSafe_shutdown '{}'".format(ids_json)
     else:
-        cmd = f"opsi-admin -d method hostControlSafe_shutdown '{ids_json}'"
+        cmd = "opsi-admin -d method hostControlSafe_shutdown '{}'".format(ids_json)
     _, stderr, rc = run(cmd, timeout=30)
     if rc == 0:
         ok("Shutdown signal sent.")
     else:
-        err(f"Failed: {stderr}")
+        err("Failed: {}".format(stderr))
 
 
 def cmd_wol_groups(args):
@@ -918,11 +931,11 @@ def cmd_wol_groups(args):
     for g in sorted(groups, key=lambda x: x.get("id", "")):
         gid = g.get("id", "")
         desc = g.get("description", "")
-        line = f"  {C.BOLD}{gid}{C.RESET}"
+        line = "  {}{}{}".format(C.BOLD, gid, C.RESET)
         if desc:
-            line += f"  {C.DIM}\u2014 {desc}{C.RESET}"
+            line += "  {}\u2014 {}{}".format(C.DIM, desc, C.RESET)
         print(line)
-    print(f"\n  {C.DIM}{len(groups)} group(s){C.RESET}")
+    print("\n  {}{} group(s){}".format(C.DIM, len(groups), C.RESET))
 
 
 # ============================================================
@@ -951,14 +964,14 @@ def cmd_diag_services(args):
     """Check systemd service status."""
     header("Service Status")
     for svc in SERVICES:
-        stdout, _, rc = run(f"systemctl is-active {svc} 2>/dev/null")
+        stdout, _, rc = run("systemctl is-active {} 2>/dev/null".format(svc))
         status = stdout.strip() if stdout else "not found"
         if status == "active":
             ok(svc)
         elif status == "inactive":
-            warn(f"{svc} (inactive)")
+            warn("{} (inactive)".format(svc))
         else:
-            err(f"{svc} ({status})")
+            err("{} ({})".format(svc, status))
 
 
 def cmd_diag_quick(args):
@@ -971,10 +984,10 @@ def cmd_diag_quick(args):
         pct_str = stdout.strip().replace("%", "")
         try:
             pct = int(pct_str)
-            msg = f"Disk /var/lib/opsi: {pct}% used"
+            msg = "Disk /var/lib/opsi: {}% used".format(pct)
             (err if pct >= 90 else warn if pct >= 75 else ok)(msg)
         except ValueError:
-            info(f"Disk /var/lib/opsi: {stdout.strip()}")
+            info("Disk /var/lib/opsi: {}".format(stdout.strip()))
     else:
         warn("Disk info unavailable")
 
@@ -986,9 +999,9 @@ def cmd_diag_quick(args):
     if rc == 0 and stdout:
         match = re.search(r"notAfter=(.+)", stdout)
         if match:
-            ok(f"Certificate expires: {match.group(1).strip()}")
+            ok("Certificate expires: {}".format(match.group(1).strip()))
         else:
-            ok(f"Certificate: {stdout}")
+            ok("Certificate: {}".format(stdout))
     else:
         warn("Certificate check failed")
 
@@ -999,11 +1012,11 @@ def cmd_diag_quick(args):
     if stdout and stdout.strip().lower() == "yes":
         ok("NTP synchronized")
     elif stdout:
-        warn(f"NTP: {stdout.strip()}")
+        warn("NTP: {}".format(stdout.strip()))
     else:
         stdout2, _, _ = run("timedatectl status 2>/dev/null | grep -i ntp")
         if stdout2:
-            info(f"NTP: {stdout2.strip()}")
+            info("NTP: {}".format(stdout2.strip()))
         else:
             warn("NTP status unknown")
 
@@ -1012,36 +1025,36 @@ def cmd_diag_quick(args):
         "opsi-cli --version 2>/dev/null || opsiconfd --version 2>/dev/null",
     )
     if stdout:
-        ok(f"OPSI version: {stdout.splitlines()[0]}")
+        ok("OPSI version: {}".format(stdout.splitlines()[0]))
     else:
         warn("OPSI version unknown")
 
     # paedML version
     stdout, _, rc = run("cat /etc/paedml-version 2>/dev/null")
     if rc == 0 and stdout:
-        ok(f"paedML version: {stdout.strip()}")
+        ok("paedML version: {}".format(stdout.strip()))
 
 
 def cmd_diag_client(args):
     """Show product status for a specific client."""
     client_id = args.client_id
-    header(f"Client: {client_id}")
+    header("Client: {}".format(client_id))
 
     # Last seen
     seen = opsi_jsonrpc(
         "host_getObjects",
         '\'["id","lastSeen"]\'',
-        f"""'{{"id":"{client_id}"}}'""",
+        """'{{"id":"{}"}}'""".format(client_id),
         timeout=30,
     )
     if seen and len(seen) > 0:
-        info(f"Last seen: {seen[0].get('lastSeen', 'never')}")
+        info("Last seen: {}".format(seen[0].get("lastSeen", "never")))
 
     # Products
     products = opsi_jsonrpc(
         "productOnClient_getObjects",
         '\'["productId","installationStatus","actionResult","actionRequest"]\'',
-        f"""'{{"clientId":"{client_id}"}}'""",
+        """'{{"clientId":"{}"}}'""".format(client_id),
         timeout=30,
     )
     if not products:
@@ -1059,9 +1072,9 @@ def cmd_diag_client(args):
         result = p.get("actionResult", "")
         request = p.get("actionRequest", "")
         if result == "failed":
-            result = f"{C.RED}{result}{C.RESET}"
+            result = "{}{}{}".format(C.RED, result, C.RESET)
         elif result == "successful":
-            result = f"{C.GREEN}{result}{C.RESET}"
+            result = "{}{}{}".format(C.GREEN, result, C.RESET)
         rows.append((pid, status, result, request))
 
     table(rows, headers=("Product", "Status", "Result", "Request"))
@@ -1091,25 +1104,25 @@ def cmd_diag_failed(args):
     ):
         rows.append((item.get("clientId", ""), item.get("productId", "")))
     table(rows, headers=("Client", "Product"))
-    print(f"\n  {C.RED}{len(rows)} failure(s){C.RESET}")
+    print("\n  {}{} failure(s){}".format(C.RED, len(rows), C.RESET))
 
 
 def cmd_diag_logs(args):
     """View recent logs for a client."""
     client_id = args.client_id
-    header(f"Logs: {client_id}")
+    header("Logs: {}".format(client_id))
     cmd = (
         "for dir in /var/log/opsi/instlog /var/log/opsi/clientconnect "
         "/var/log/opsi/bootimage; do "
-        f"for f in $(ls -t $dir/{client_id}* 2>/dev/null | head -1); do "
+        "for f in $(ls -t $dir/{}* 2>/dev/null | head -1); do "
         "echo '=== '$f' ==='; tail -80 \"$f\"; echo; "
-        "done; done"
+        "done; done".format(client_id)
     )
     stdout, _, _ = run(cmd, timeout=30)
     if stdout:
         print(stdout)
     else:
-        warn(f"No logs found for {client_id}")
+        warn("No logs found for {}".format(client_id))
 
 
 def cmd_diag_paedml(args):
@@ -1131,7 +1144,7 @@ def cmd_diag_paedml(args):
             "Certificate",
             "openssl s_client -connect localhost:4447 </dev/null 2>/dev/null "
             "| openssl x509 -checkend 2592000 -noout 2>&1",
-            None,  # rc == 0 means valid > 30 days
+            None,
         ),
         (
             "DNS Forward",
@@ -1180,12 +1193,12 @@ def cmd_diag_paedml(args):
             first_line = output.strip().splitlines()[0]
             if len(first_line) > 80:
                 first_line = first_line[:77] + "..."
-            detail = f" {C.DIM}{first_line}{C.RESET}"
+            detail = " {}{}{}".format(C.DIM, first_line, C.RESET)
 
         if passed:
-            ok(f"{name:<20}{detail}")
+            ok("{:<20}{}".format(name, detail))
         else:
-            err(f"{name:<20}{detail}")
+            err("{:<20}{}".format(name, detail))
 
 
 # ============================================================
@@ -1204,7 +1217,7 @@ def cmd_self_update(args):
         resp = urlreq.urlopen(req, timeout=15)
         new_content = resp.read().decode("utf-8")
     except Exception as exc:
-        die(f"Update check failed: {exc}")
+        die("Update check failed: {}".format(exc))
 
     match = re.search(r'VERSION\s*=\s*["\']([^"\']+)["\']', new_content)
     if not match:
@@ -1212,10 +1225,10 @@ def cmd_self_update(args):
 
     remote_version = match.group(1)
     if remote_version == VERSION:
-        ok(f"Already up to date (v{VERSION})")
+        ok("Already up to date (v{})".format(VERSION))
         return
 
-    info(f"Update available: v{VERSION} \u2192 v{remote_version}")
+    info("Update available: v{} \u2192 v{}".format(VERSION, remote_version))
     if not confirm("Install update?"):
         return
 
@@ -1224,29 +1237,29 @@ def cmd_self_update(args):
         with open(script_path, "w") as fh:
             fh.write(new_content)
         os.chmod(script_path, 0o755)
-        ok(f"Updated to v{remote_version}")
+        ok("Updated to v{}".format(remote_version))
     except PermissionError:
-        die(f"Cannot write to {script_path}. Run as root.")
+        die("Cannot write to {}. Run as root.".format(script_path))
     except Exception as exc:
-        die(f"Update failed: {exc}")
+        die("Update failed: {}".format(exc))
 
 
 def cmd_self_install(args):
     """Copy this script to /usr/local/bin/packforge."""
     dest = "/usr/local/bin/packforge"
     header("Self-Install")
-    info(f"Installing to {dest}...")
+    info("Installing to {}...".format(dest))
 
     try:
         src = os.path.realpath(__file__)
         shutil.copy2(src, dest)
         os.chmod(dest, 0o755)
-        ok(f"Installed to {dest}")
+        ok("Installed to {}".format(dest))
         info("Run 'packforge' from anywhere.")
     except PermissionError:
-        die(f"Cannot write to {dest}. Run as root.")
+        die("Cannot write to {}. Run as root.".format(dest))
     except Exception as exc:
-        die(f"Install failed: {exc}")
+        die("Install failed: {}".format(exc))
 
 
 # ============================================================
@@ -1269,7 +1282,8 @@ def build_parser():
         """),
     )
     parser.add_argument(
-        "--version", action="version", version=f"packforge v{VERSION}",
+        "--version", action="version",
+        version="packforge v{}".format(VERSION),
     )
     parser.add_argument(
         "--no-color", action="store_true", help="disable colored output",
@@ -1312,7 +1326,9 @@ def build_parser():
         help="set update action on installed clients",
     )
 
-    p = pkg_sub.add_parser("remove", aliases=["rm", "uninstall"], help="remove package")
+    p = pkg_sub.add_parser(
+        "remove", aliases=["rm", "uninstall"], help="remove package",
+    )
     p.add_argument("product_id", nargs="?", help="product ID")
     p.add_argument(
         "--depots-all", action="store_true", help="remove from all depots",
@@ -1415,12 +1431,6 @@ DIAG_DISPATCH = {
 # ============================================================
 
 def main():
-    if sys.version_info < (3, 6):
-        sys.exit(
-            "packforge requires Python 3.6+. "
-            "You have {}.{}.{}".format(*sys.version_info[:3])
-        )
-
     parser = build_parser()
     args = parser.parse_args()
 
