@@ -6,7 +6,6 @@ from __future__ import print_function
 
 import os
 import sys
-import argparse
 import subprocess
 import re
 
@@ -22,6 +21,13 @@ _  .___/\__,_/ \___/ /_/|_| /_/    \____//_/    _\__, / \___/
 /_/                                             /____/
 """
 
+MENU = """\
+  [1] Create package
+  [2] Build package
+  [3] Install package
+  [4] List packages
+  [0] Exit
+"""
 
 CONTROL_TEMPLATE = """\
 [Package]
@@ -96,18 +102,18 @@ def validate_product_id(product_id):
     return bool(re.match(r'^[a-z0-9][a-z0-9\-]*$', product_id))
 
 
-def cmd_create(args):
-    print(BANNER)
+def do_create():
+    print("\n--- Create OPSI Package ---\n")
 
-    product_id = args.product_id or prompt("Product ID (e.g. my-software)")
+    product_id = prompt("Product ID (e.g. my-software)")
     while not validate_product_id(product_id):
         print("Invalid product ID. Use lowercase letters, numbers, and hyphens.")
         product_id = prompt("Product ID")
 
-    product_name = args.name or prompt("Product name", product_id)
-    product_version = args.version or prompt("Version", "1.0")
+    product_name = prompt("Product name", product_id)
+    product_version = prompt("Version", "1.0")
     package_version = prompt("Package version", "1")
-    description = args.description or prompt("Description", "")
+    description = prompt("Description", "")
 
     package_dir = os.path.join(WORKBENCH, product_id)
     opsi_dir = os.path.join(package_dir, "OPSI")
@@ -118,7 +124,7 @@ def cmd_create(args):
         overwrite = prompt("Overwrite? (y/N)", "N")
         if overwrite.lower() != "y":
             print("Aborted.")
-            return 1
+            return
 
     for d in [opsi_dir, client_dir]:
         if not os.path.exists(d):
@@ -146,26 +152,23 @@ def cmd_create(args):
     print("  CLIENT_DATA/setup.ins")
     print("  CLIENT_DATA/uninstall.ins")
 
-    build = prompt("\nBuild package now? (y/N)", "N")
-    if build.lower() == "y":
-        return cmd_build_path(package_dir)
 
-    return 0
+def do_build():
+    print("\n--- Build OPSI Package ---\n")
 
+    product_id = prompt("Product ID")
+    if not product_id:
+        return
 
-def cmd_build(args):
-    package_dir = os.path.join(WORKBENCH, args.product_id)
+    package_dir = os.path.join(WORKBENCH, product_id)
     if not os.path.isdir(package_dir):
         print("Not found: {}".format(package_dir))
-        return 1
-    return cmd_build_path(package_dir)
+        return
 
-
-def cmd_build_path(package_dir):
     control = os.path.join(package_dir, "OPSI", "control")
     if not os.path.isfile(control):
         print("No OPSI/control found in {}".format(package_dir))
-        return 1
+        return
 
     print("Building package in {}...".format(package_dir))
     proc = subprocess.Popen(
@@ -181,21 +184,26 @@ def cmd_build_path(package_dir):
         print("Build failed:")
         if stderr:
             print(stderr)
-        return 1
+        return
 
     if stdout:
         print(stdout)
     print("Build successful.")
-    return 0
 
 
-def cmd_install(args):
-    package_dir = os.path.join(WORKBENCH, args.product_id)
+def do_install():
+    print("\n--- Install OPSI Package ---\n")
+
+    product_id = prompt("Product ID")
+    if not product_id:
+        return
+
+    package_dir = os.path.join(WORKBENCH, product_id)
     if not os.path.isdir(package_dir):
         print("Not found: {}".format(package_dir))
-        return 1
+        return
 
-    print("Installing {}...".format(args.product_id))
+    print("Installing {}...".format(product_id))
     proc = subprocess.Popen(
         ["opsi-package-manager", "-i", package_dir],
         stdout=subprocess.PIPE,
@@ -208,18 +216,19 @@ def cmd_install(args):
         print("Install failed:")
         if stderr:
             print(stderr)
-        return 1
+        return
 
     if stdout:
         print(stdout)
     print("Package installed.")
-    return 0
 
 
-def cmd_list(args):
+def do_list():
+    print("\n--- Packages in Workbench ---\n")
+
     if not os.path.isdir(WORKBENCH):
         print("Workbench not found: {}".format(WORKBENCH))
-        return 1
+        return
 
     packages = []
     for name in sorted(os.listdir(WORKBENCH)):
@@ -228,52 +237,33 @@ def cmd_list(args):
             packages.append(name)
 
     if not packages:
-        print("No packages found in workbench.")
+        print("No packages found.")
     else:
-        print("Packages in workbench:")
         for p in packages:
             print("  {}".format(p))
 
-    return 0
-
 
 def main():
-    parser = argparse.ArgumentParser(
-        prog="packforge",
-        description="Packforge - create and manage paedML OPSI packages",
-    )
-    sub = parser.add_subparsers(dest="command")
+    print(BANNER)
 
-    p_create = sub.add_parser("create", help="Create a new OPSI package")
-    p_create.add_argument("product_id", nargs="?", help="Product ID")
-    p_create.add_argument("-n", "--name", help="Product name")
-    p_create.add_argument("-v", "--version", help="Product version")
-    p_create.add_argument("-d", "--description", help="Description")
+    while True:
+        print(MENU)
+        choice = prompt("Select")
 
-    p_build = sub.add_parser("build", help="Build an OPSI package")
-    p_build.add_argument("product_id", help="Product ID")
-
-    p_install = sub.add_parser("install", help="Install an OPSI package")
-    p_install.add_argument("product_id", help="Product ID")
-
-    sub.add_parser("list", help="List packages in workbench")
-
-    args = parser.parse_args()
-
-    if not args.command:
-        print(BANNER)
-        parser.print_help()
-        return 0
-
-    commands = {
-        "create": cmd_create,
-        "build": cmd_build,
-        "install": cmd_install,
-        "list": cmd_list,
-    }
-
-    return commands[args.command](args)
+        if choice == "1":
+            do_create()
+        elif choice == "2":
+            do_build()
+        elif choice == "3":
+            do_install()
+        elif choice == "4":
+            do_list()
+        elif choice == "0":
+            print("Bye.")
+            break
+        else:
+            print("Invalid choice.")
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()
