@@ -23,9 +23,7 @@ _  .___/\__,_/ \___/ /_/|_| /_/    \____//_/    _\__, / \___/
 
 MENU = """\
   [1] Create package
-  [2] Build package
-  [3] Install package
-  [4] List packages
+  [2] List packages
   [0] Exit
 """
 
@@ -102,6 +100,72 @@ def validate_product_id(product_id):
     return bool(re.match(r'^[a-z0-9][a-z0-9\-]*$', product_id))
 
 
+def cmd_exists(cmd):
+    try:
+        proc = subprocess.Popen(
+            ["which", cmd],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        proc.communicate()
+        return proc.returncode == 0
+    except OSError:
+        return False
+
+
+def build_package(package_dir):
+    if not cmd_exists("opsi-makepackage"):
+        print("ERROR: opsi-makepackage not found.")
+        return False
+
+    print("Building package...")
+    proc = subprocess.Popen(
+        ["opsi-makepackage", "-q"],
+        cwd=package_dir,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
+    )
+    stdout, stderr = proc.communicate()
+
+    if proc.returncode != 0:
+        print("Build failed:")
+        if stderr:
+            print(stderr)
+        return False
+
+    if stdout:
+        print(stdout)
+    print("Build successful.")
+    return True
+
+
+def install_package(package_dir):
+    if not cmd_exists("opsi-package-manager"):
+        print("ERROR: opsi-package-manager not found.")
+        return False
+
+    print("Installing package...")
+    proc = subprocess.Popen(
+        ["opsi-package-manager", "-i", package_dir],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
+    )
+    stdout, stderr = proc.communicate()
+
+    if proc.returncode != 0:
+        print("Install failed:")
+        if stderr:
+            print(stderr)
+        return False
+
+    if stdout:
+        print(stdout)
+    print("Package installed.")
+    return True
+
+
 def do_create():
     print("\n--- Create OPSI Package ---\n")
 
@@ -150,77 +214,14 @@ def do_create():
     print("\nPackage created: {}".format(package_dir))
     print("  OPSI/control")
     print("  CLIENT_DATA/setup.ins")
-    print("  CLIENT_DATA/uninstall.ins")
+    print("  CLIENT_DATA/uninstall.ins\n")
 
-
-def do_build():
-    print("\n--- Build OPSI Package ---\n")
-
-    product_id = prompt("Product ID")
-    if not product_id:
+    # Build
+    if not build_package(package_dir):
         return
 
-    package_dir = os.path.join(WORKBENCH, product_id)
-    if not os.path.isdir(package_dir):
-        print("Not found: {}".format(package_dir))
-        return
-
-    control = os.path.join(package_dir, "OPSI", "control")
-    if not os.path.isfile(control):
-        print("No OPSI/control found in {}".format(package_dir))
-        return
-
-    print("Building package in {}...".format(package_dir))
-    proc = subprocess.Popen(
-        ["opsi-makepackage", "-q"],
-        cwd=package_dir,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        universal_newlines=True,
-    )
-    stdout, stderr = proc.communicate()
-
-    if proc.returncode != 0:
-        print("Build failed:")
-        if stderr:
-            print(stderr)
-        return
-
-    if stdout:
-        print(stdout)
-    print("Build successful.")
-
-
-def do_install():
-    print("\n--- Install OPSI Package ---\n")
-
-    product_id = prompt("Product ID")
-    if not product_id:
-        return
-
-    package_dir = os.path.join(WORKBENCH, product_id)
-    if not os.path.isdir(package_dir):
-        print("Not found: {}".format(package_dir))
-        return
-
-    print("Installing {}...".format(product_id))
-    proc = subprocess.Popen(
-        ["opsi-package-manager", "-i", package_dir],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        universal_newlines=True,
-    )
-    stdout, stderr = proc.communicate()
-
-    if proc.returncode != 0:
-        print("Install failed:")
-        if stderr:
-            print(stderr)
-        return
-
-    if stdout:
-        print(stdout)
-    print("Package installed.")
+    # Install
+    install_package(package_dir)
 
 
 def do_list():
@@ -253,10 +254,6 @@ def main():
         if choice == "1":
             do_create()
         elif choice == "2":
-            do_build()
-        elif choice == "3":
-            do_install()
-        elif choice == "4":
             do_list()
         elif choice == "0":
             print("Bye.")
