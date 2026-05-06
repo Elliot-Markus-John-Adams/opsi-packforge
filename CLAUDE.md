@@ -1,103 +1,96 @@
-# CLAUDE.md - OPSI Toolbox
+# CLAUDE.md - OPSI PackForge CLI
 
 ## Project Overview
 
-OPSI Toolbox is a Python/tkinter GUI application for OPSI (Open Source Platform for System Integration) server administration — packaging, Wake-on-LAN, diagnostics, and paedML Linux support.
+OPSI PackForge is a Python CLI tool that runs **directly on OPSI servers** for administration — packaging, Wake-on-LAN, diagnostics, and paedML Linux support.
 
-**Version:** v3.0
+Technicians SSH into a customer server, then run `packforge` locally. No GUI, no external dependencies.
+
+**Version:** v4.0
 **Repository:** https://github.com/Elliot-Markus-John-Adams/opsi-packforge.git
 
 ## Tech Stack
 
-- **Python 3.x** with tkinter for GUI (no external dependencies)
-- **PowerShell** for Windows installation automation
-- **OPSI** - Linux-based client management platform target
-- **SSH/SCP** for remote server communication
+- **Python 3.6+** (stdlib only, zero external dependencies)
+- **OPSI** — Linux-based client management platform
+- Runs on **Univention DC Master** / Debian-based OPSI servers
 
 ## Project Structure
 
 ```
 opsi-packforge/
-├── packforge.pyw      # Main GUI application (~2200 lines)
-├── install.ps1        # Windows PowerShell installer
+├── packforge.py       # Single-file CLI tool (~900 lines)
 └── CLAUDE.md          # This file
 ```
 
-## Application Pages
+## CLI Commands
 
-### 1. Dashboard
-Live server overview with auto-refresh:
-- Server status (opsiconfd)
-- Package count, clients online, disk space, failed deployments
-- Quick action buttons
+```
+packforge [--no-color] [--json] [-y] <command> [subcommand]
 
-### 2. Packaging (3 sub-tabs)
-- **Create Package** — Build OPSI packages from installers (MSI, InnoSetup, NSIS, EXE, PS1, BAT)
-- **Update Package** — Upload .opsi files, deploy with `-S` (setup on clients) or `-U` (update action)
-- **Remove Package** — Remove/purge packages with search filter, multi-select, all-depots option
+(no args)                          Dashboard (default)
 
-### 3. Wake on LAN
-- Left panel: Live client status list (name, IP, MAC, online/offline) from OPSI API
-- Right panel: Wake All / Wake Group / Wake Selected / Manual MAC entry
-- Additional: Reboot Selected, Shutdown Selected
-- Auto-refresh toggle (10s interval)
-- Groups fetched from OPSI server
+pkg list                           List installed packages
+pkg create [path]                  Build package from workbench dir
+pkg create --wizard                Interactive package wizard
+pkg install <file.opsi> [-S|-U]    Install package to depot
+pkg remove [product-id]            Remove package (interactive if no ID)
+  --depots-all                     Remove from all depots
 
-### 4. Diagnostics (4 sub-tabs)
-- **Connection** — Ping, SSH test, port check (22, 4447, 445, 80, 443)
-- **Server Health** — `opsi-cli support health-check`, service status grid (7 services), quick checks (disk, certs, NTP, versions)
-- **Client Diagnostics** — Product status per client, failed installs across all clients, log viewer
-- **paedML Checks** — 10-point diagnostic: NTP, disk, certs, DNS, DHCP, Samba AD, domain join, Sophomorix
+wol list                           Client status (online/offline)
+wol wake [--all|--group <g>|<id>]  Wake clients
+wol reboot <id>...                 Reboot clients
+wol shutdown <id>...               Shutdown clients
+wol groups                         List host groups
+
+diag health                        opsi-cli support health-check
+diag services                      Check systemd services
+diag quick                         Disk, certs, NTP, version
+diag client <id>                   Product status per client
+diag failed                        All failed installations
+diag logs <id>                     View client logs
+diag paedml                        paedML 10-point check
+
+self-update                        Update from GitHub
+self-install                       Install to /usr/local/bin/
+```
 
 ## Key OPSI Commands Used
 
 | Operation | Command |
 |-----------|---------|
 | Build package | `opsi-makepackage --keep-versions` |
-| Install package | `opsi-package-manager -i <pkg.opsi>` |
-| Update (setup clients) | `opsi-package-manager -S -i <pkg.opsi>` |
-| Remove package | `opsi-package-manager -r <product-id>` |
-| Purge package | `opsi-package-manager --purge <product-id>` |
+| Install package | `opsi-cli package install <file>` |
+| Install + setup | `opsi-cli package install --setup-where-installed` |
+| Remove package | `opsi-cli package uninstall <id>` |
 | List packages | `opsi-package-manager -l` |
-| Wake clients | `opsi-admin -d method hostControlSafe_start` |
-| Client reachability | `opsi-admin -d method hostControlSafe_reachable` |
+| Wake clients | `opsi-cli jsonrpc execute hostControlSafe_start` |
+| Reachability | `opsi-cli jsonrpc execute hostControlSafe_reachable` |
 | Health check | `opsi-cli support health-check` |
 
-## Global Settings
+Falls back to `opsi-admin` on older OPSI installations.
 
-Server IP and SSH user are configured in the sidebar (shared across all pages).
-
-## Custom Widgets
-
-- **ModernEntry** — Styled entry with placeholder support
-- **ModernButton** — Canvas button with hover effects and rounded corners
-- **SidebarButton** — Navigation button with active indicator
-- **TabButton** — Sub-page tab switching
-
-## Color Theme
-
-Dark theme with blue accents:
-- Background: `#0a0a0a`
-- Cards: `#161616`
-- Accent: `#3b82f6`
-- Success: `#22c55e`
-- Warning: `#f59e0b`
-- Error: `#ef4444`
-
-## Running the Application
+## Deployment
 
 ```bash
-python packforge.pyw
-pythonw packforge.pyw  # No console window
+# Install on a server
+curl -fsSL https://raw.githubusercontent.com/elliot-markus-john-adams/opsi-packforge/main/packforge.py -o /usr/local/bin/packforge && chmod +x /usr/local/bin/packforge
 
-# Windows installation
-irm https://raw.githubusercontent.com/elliot-markus-john-adams/opsi-packforge/main/install.ps1 | iex
+# Or self-install after download
+python3 packforge.py self-install
+
+# Update
+packforge self-update
 ```
 
-## Development Notes
+## Architecture Notes
 
-- All SSH commands run in background threads to avoid UI blocking
-- `_ssh_cmd()` / `_ssh_bg()` are centralized SSH helpers using global server settings
-- `self.after(0, callback)` is used for thread-safe UI updates
-- Package IDs must be lowercase, numbers, hyphens only
-- No external Python dependencies required
+- Single file, zero dependencies — runs anywhere with Python 3.6+
+- All commands run locally via `subprocess.run()` (no SSH — the tool is ON the server)
+- `detect_opsi_cli()` auto-detects `opsi-cli` vs `opsi-admin` for compatibility
+- `opsi_jsonrpc()` is the central helper for all OPSI API calls
+- ANSI colors auto-disabled when piped or `--no-color` / `NO_COLOR` env
+- `--json` flag for machine-readable output (scripting)
+- `-y` flag skips confirmations (automation)
+- Interactive pickers (`pick_one`, `pick_many`) when no args given
+- Package IDs: lowercase, numbers, hyphens only
