@@ -38,6 +38,34 @@ SERVICES = [
 # Global options set by main()
 OPTS = {"no_color": False, "json_mode": False, "yes": False}
 
+# Symbols — ASCII fallbacks for non-UTF-8 terminals
+def _can_utf8():
+    try:
+        "\u2713".encode(sys.stdout.encoding or "ascii")
+        return True
+    except (UnicodeEncodeError, LookupError):
+        return False
+
+class S:
+    """Display symbols. Swapped to ASCII if terminal can't do UTF-8."""
+    CHECK = "+"
+    CROSS = "x"
+    BULLET = "*"
+    HLINE = "-"
+    DASH = "--"
+    ARROW = "->"
+    SPINNER = "|/-\\"
+
+    @classmethod
+    def use_utf8(cls):
+        cls.CHECK = "\u2713"
+        cls.CROSS = "\u2717"
+        cls.BULLET = "\u2022"
+        cls.HLINE = "\u2500"
+        cls.DASH = "\u2014"
+        cls.ARROW = "\u2192"
+        cls.SPINNER = "\u280b\u2819\u2839\u2838\u283c\u2834\u2826\u2827\u2807\u280f"
+
 
 # ============================================================
 # ANSI COLORS
@@ -71,11 +99,11 @@ class C:
 # ============================================================
 
 def ok(msg):
-    print("  {}\u2713{} {}".format(C.GREEN, C.RESET, msg))
+    print("  {}{}{} {}".format(C.GREEN, S.CHECK, C.RESET, msg))
 
 
 def err(msg):
-    print("  {}\u2717{} {}".format(C.RED, C.RESET, msg))
+    print("  {}{}{} {}".format(C.RED, S.CROSS, C.RESET, msg))
 
 
 def warn(msg):
@@ -83,12 +111,12 @@ def warn(msg):
 
 
 def info(msg):
-    print("  {}\u2022{} {}".format(C.BLUE, C.RESET, msg))
+    print("  {}{}{} {}".format(C.BLUE, S.BULLET, C.RESET, msg))
 
 
 def header(title):
     print("\n{}{}  {}{}".format(C.BOLD, C.CYAN, title, C.RESET))
-    print("  {}".format("\u2500" * len(title)))
+    print("  {}".format(S.HLINE * len(title)))
 
 
 def die(msg):
@@ -119,7 +147,7 @@ def table(rows, headers=None, indent=2):
         print(prefix + "  ".join(parts).rstrip())
         if headers and j == 0:
             total = sum(widths) + 2 * (cols - 1)
-            print(prefix + "\u2500" * total)
+            print(prefix + S.HLINE * total)
 
 
 def confirm(msg):
@@ -141,7 +169,7 @@ def confirm(msg):
 class Spinner:
     """Simple braille spinner for long-running commands."""
 
-    CHARS = "\u280b\u2819\u2839\u2838\u283c\u2834\u2826\u2827\u2807\u280f"
+    CHARS = "|/-\\"  # overridden to braille if UTF-8
 
     def __init__(self, msg):
         self.msg = msg
@@ -168,7 +196,7 @@ class Spinner:
     def _spin(self):
         i = 0
         while self.running:
-            ch = self.CHARS[i % len(self.CHARS)]
+            ch = S.SPINNER[i % len(S.SPINNER)]
             sys.stdout.write(
                 "\r  {}{}{} {}".format(C.BLUE, ch, C.RESET, self.msg)
             )
@@ -933,7 +961,7 @@ def cmd_wol_groups(args):
         desc = g.get("description", "")
         line = "  {}{}{}".format(C.BOLD, gid, C.RESET)
         if desc:
-            line += "  {}\u2014 {}{}".format(C.DIM, desc, C.RESET)
+            line += "  {}{} {}{}".format(C.DIM, S.DASH, desc, C.RESET)
         print(line)
     print("\n  {}{} group(s){}".format(C.DIM, len(groups), C.RESET))
 
@@ -1228,7 +1256,7 @@ def cmd_self_update(args):
         ok("Already up to date (v{})".format(VERSION))
         return
 
-    info("Update available: v{} \u2192 v{}".format(VERSION, remote_version))
+    info("Update available: v{} {} v{}".format(VERSION, S.ARROW, remote_version))
     if not confirm("Install update?"):
         return
 
@@ -1269,7 +1297,7 @@ def cmd_self_install(args):
 def build_parser():
     parser = argparse.ArgumentParser(
         prog="packforge",
-        description="OPSI PackForge CLI \u2014 on-server OPSI administration tool",
+        description="OPSI PackForge CLI -- on-server OPSI administration tool",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=textwrap.dedent("""\
             examples:
@@ -1441,6 +1469,9 @@ def main():
 
     if args.no_color or not sys.stdout.isatty() or os.environ.get("NO_COLOR"):
         C.disable()
+
+    if _can_utf8():
+        S.use_utf8()
 
     # Root warning (Linux only)
     if hasattr(os, "geteuid") and os.geteuid() != 0:
