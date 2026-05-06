@@ -133,10 +133,17 @@ UNINST
     fi
 
     echo "Building package..."
-    if opsi-makepackage -q --no-md5 -d "$package_dir"; then
+    if (cd "$package_dir" && opsi-makepackage --quiet --no-md5 --no-zsync); then
         echo "Build successful."
     else
         echo "Build failed."
+        return
+    fi
+
+    # Find the built .opsi file
+    opsi_file=$(ls -t "$package_dir"/*.opsi 2>/dev/null | head -1)
+    if [ -z "$opsi_file" ]; then
+        echo "ERROR: No .opsi file found after build."
         return
     fi
 
@@ -147,7 +154,7 @@ UNINST
     fi
 
     echo "Installing package..."
-    if opsi-package-manager -i "$package_dir"; then
+    if LC_ALL=C opsi-package-manager -i "$opsi_file"; then
         echo "Package installed."
     else
         echo "Install failed."
@@ -156,25 +163,15 @@ UNINST
 
 do_list() {
     echo ""
-    echo "--- Packages in Workbench ---"
+    echo "--- Installed OPSI Packages ---"
     echo ""
 
-    if [ ! -d "$WORKBENCH" ]; then
-        echo "Workbench not found: $WORKBENCH"
+    if ! command -v opsi-package-manager > /dev/null 2>&1; then
+        echo "ERROR: opsi-package-manager not found. Is this the OPSI depot server?"
         return
     fi
 
-    found=0
-    for dir in "$WORKBENCH"/*/; do
-        if [ -f "${dir}OPSI/control" ]; then
-            echo "  $(basename "$dir")"
-            found=1
-        fi
-    done
-
-    if [ "$found" -eq 0 ]; then
-        echo "No packages found."
-    fi
+    LC_ALL=C opsi-package-manager -l
 }
 
 # Main
