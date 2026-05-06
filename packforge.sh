@@ -161,6 +161,46 @@ UNINST
     fi
 }
 
+do_remove() {
+    echo ""
+    echo "--- Remove OPSI Package ---"
+    echo ""
+
+    if ! command -v opsi-package-manager > /dev/null 2>&1; then
+        echo "ERROR: opsi-package-manager not found. Is this the OPSI depot server?"
+        return
+    fi
+
+    read -p "Product ID to remove: " product_id
+    if [ -z "$product_id" ]; then
+        echo "Aborted."
+        return
+    fi
+
+    read -p "Are you sure you want to remove '$product_id'? (y/N): " confirm
+    if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
+        echo "Aborted."
+        return
+    fi
+
+    echo "Removing $product_id..."
+    if LC_ALL=C opsi-package-manager -r "$product_id"; then
+        echo "Package removed."
+    else
+        echo "Remove failed."
+        return
+    fi
+
+    # Clean up workbench directory if it exists
+    if [ -d "$WORKBENCH/$product_id" ]; then
+        read -p "Also delete workbench directory $WORKBENCH/$product_id? (y/N): " cleanup
+        if [ "$cleanup" = "y" ] || [ "$cleanup" = "Y" ]; then
+            rm -rf "$WORKBENCH/$product_id"
+            echo "Workbench directory deleted."
+        fi
+    fi
+}
+
 do_list() {
     echo ""
     echo "--- Installed OPSI Packages ---"
@@ -179,14 +219,16 @@ banner
 
 while true; do
     echo "  [1] Create package"
-    echo "  [2] List packages"
+    echo "  [2] Remove package"
+    echo "  [3] List packages"
     echo "  [0] Exit"
     echo ""
     read -p "Select: " choice
 
     case "$choice" in
         1) do_create ;;
-        2) do_list ;;
+        2) do_remove ;;
+        3) do_list ;;
         0) echo "Bye."; exit 0 ;;
         *) echo "Invalid choice." ;;
     esac
