@@ -90,80 +90,6 @@ requirementType: before
         fi
     fi
 
-    # --- Properties ---
-    prop_blocks=""
-    echo ""
-    read -p "Add product properties? (y/N): " add_props
-    while [ "$add_props" = "y" ] || [ "$add_props" = "Y" ]; do
-        echo ""
-        echo "  Property type:"
-        echo "  [1] bool (True/False toggle)"
-        echo "  [2] unicode (text/selection)"
-        read -p "  Select: " prop_type_choice
-
-        case "$prop_type_choice" in
-            1)
-                read -p "  Property name (e.g. desktop_shortcut): " prop_name
-                read -p "  Description: " prop_desc
-                read -p "  Default (True/False) [False]: " prop_default
-                prop_default="${prop_default:-False}"
-                prop_blocks="$prop_blocks
-[ProductProperty]
-type: bool
-name: $prop_name
-description: $prop_desc
-default: $prop_default
-"
-                ;;
-            2)
-                read -p "  Property name (e.g. install_language): " prop_name
-                read -p "  Description: " prop_desc
-                read -p "  Possible values (comma-separated, e.g. de,en,fr): " prop_vals_raw
-                read -p "  Default value: " prop_def_raw
-                read -p "  Allow multiple values? (y/N): " prop_multi
-                read -p "  Allow custom values? (y/N): " prop_edit
-
-                # Format values as JSON list
-                prop_values=""
-                IFS=','
-                for v in $prop_vals_raw; do
-                    v=$(echo "$v" | sed 's/^ *//;s/ *$//')
-                    if [ -z "$prop_values" ]; then
-                        prop_values="\"$v\""
-                    else
-                        prop_values="$prop_values, \"$v\""
-                    fi
-                done
-                unset IFS
-
-                multi="False"
-                if [ "$prop_multi" = "y" ] || [ "$prop_multi" = "Y" ]; then
-                    multi="True"
-                fi
-                edit="False"
-                if [ "$prop_edit" = "y" ] || [ "$prop_edit" = "Y" ]; then
-                    edit="True"
-                fi
-
-                prop_blocks="$prop_blocks
-[ProductProperty]
-type: unicode
-name: $prop_name
-multivalue: $multi
-editable: $edit
-description: $prop_desc
-values: [$prop_values]
-default: [\"$prop_def_raw\"]
-"
-                ;;
-            *)
-                echo "  Invalid choice."
-                ;;
-        esac
-
-        read -p "Add another property? (y/N): " add_props
-    done
-
     # --- Create directories ---
     package_dir="$WORKBENCH/$product_id"
     opsi_dir="$package_dir/OPSI"
@@ -212,10 +138,6 @@ CTRL
         echo "$dep_blocks" >> "$opsi_dir/control"
     fi
 
-    # Append properties
-    if [ -n "$prop_blocks" ]; then
-        echo "$prop_blocks" >> "$opsi_dir/control"
-    fi
 
     # --- Write setup.opsiscript ---
     cat > "$client_dir/setup.opsiscript" << 'SETUP'
