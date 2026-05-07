@@ -637,8 +637,8 @@ do_wol() {
     online=0
     offline=0
     for client in $selected_clients; do
-        # Check if this client has result: true (-F for fixed string, dots in FQDN)
-        is_online=$(echo "$reach_result" | grep -F -A2 "\"$client\"" | grep -c '"result": true')
+        # Check if this client is reachable (format: "client.fqdn": true)
+        is_online=$(echo "$reach_result" | grep -F "\"$client\"" | grep -c 'true')
         if [ "$is_online" -gt 0 ]; then
             online=$((online + 1))
         else
