@@ -295,7 +295,7 @@ do_deploy() {
             selected_clients=$(echo "$selected_clients" | tr -d '"')
             ;;
         3)
-            read -p "Pattern: " pattern
+            read -p "Pattern (e.g. raum1 or pc-.*): " pattern
             selected_clients=$(echo "$client_list" | grep -i "$pattern")
             if [ -z "$selected_clients" ]; then
                 echo "No clients match pattern."
@@ -353,6 +353,515 @@ do_deploy() {
     echo "Deploy complete."
 }
 
+do_wol() {
+    echo ""
+    echo "--- Wake-on-LAN ---"
+    echo ""
+
+    if ! command -v opsi-admin > /dev/null 2>&1; then
+        echo "ERROR: opsi-admin not found."
+        return
+    fi
+
+    if ! command -v whiptail > /dev/null 2>&1; then
+        echo "ERROR: whiptail not found."
+        return
+    fi
+
+    echo "Loading clients..."
+    client_list=$(LC_ALL=C opsi-admin -d method host_getIdents str '{"type":"OpsiClient"}' 2>/dev/null | tr -d '[]",' | tr ' ' '\n' | sed '/^$/d' | sort)
+
+    if [ -z "$client_list" ]; then
+        echo "No clients found."
+        return
+    fi
+
+    echo ""
+    echo "  [1] All clients"
+    echo "  [2] Select specific clients"
+    echo "  [3] Filter by pattern"
+    echo ""
+    read -p "Client selection: " wol_method
+
+    selected_clients=""
+
+    case "$wol_method" in
+        1)
+            selected_clients="$client_list"
+            ;;
+        2)
+            client_count=$(echo "$client_list" | wc -l)
+            clist_height=$client_count
+            if [ "$clist_height" -gt 20 ]; then clist_height=20; fi
+            cheight=$((clist_height + 8))
+
+            set --
+            for client in $client_list; do
+                set -- "$@" "$client" "" OFF
+            done
+
+            selected_clients=$(whiptail --checklist "Select clients to wake (SPACE=select, ENTER=confirm)" $cheight 70 $clist_height "$@" 3>&1 1>&2 2>&3)
+
+            if [ $? -ne 0 ] || [ -z "$selected_clients" ]; then
+                echo "No clients selected."
+                return
+            fi
+            selected_clients=$(echo "$selected_clients" | tr -d '"')
+            ;;
+        3)
+            read -p "Pattern (e.g. raum1 or pc-.*): " pattern
+            selected_clients=$(echo "$client_list" | grep -i "$pattern")
+            if [ -z "$selected_clients" ]; then
+                echo "No clients match pattern."
+                return
+            fi
+            echo "Matching clients:"
+            for c in $selected_clients; do
+                echo "  $c"
+            done
+            echo ""
+            read -p "Continue? (y/N): " confirm
+            if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
+                echo "Aborted."
+                return
+            fi
+            ;;
+        *)
+            echo "Invalid choice."
+            return
+            ;;
+    esac
+
+    if [ -z "$selected_clients" ]; then
+        echo "No clients selected."
+        return
+    fi
+
+    # Build JSON array of clients
+    json_clients="["
+    first=1
+    for client in $selected_clients; do
+        if [ "$first" -eq 1 ]; then
+            json_clients="$json_clients\"$client\""
+            first=0
+        else
+            json_clients="$json_clients,\"$client\""
+        fi
+    done
+    json_clients="$json_clients]"
+
+    echo ""
+    echo "Sending Wake-on-LAN..."
+    if LC_ALL=C opsi-admin -d method hostControlSafe_start "$json_clients" 2>/dev/null; then
+        echo "WoL packets sent."
+    else
+        echo "WoL failed."
+    fi
+}
+
+do_ondemand() {
+    echo ""
+    echo "--- On-Demand Installation ---"
+    echo ""
+
+    if ! command -v opsi-admin > /dev/null 2>&1; then
+        echo "ERROR: opsi-admin not found."
+        return
+    fi
+
+    if ! command -v whiptail > /dev/null 2>&1; then
+        echo "ERROR: whiptail not found."
+        return
+    fi
+
+    echo "Loading clients..."
+    client_list=$(LC_ALL=C opsi-admin -d method host_getIdents str '{"type":"OpsiClient"}' 2>/dev/null | tr -d '[]",' | tr ' ' '\n' | sed '/^$/d' | sort)
+
+    if [ -z "$client_list" ]; then
+        echo "No clients found."
+        return
+    fi
+
+    echo ""
+    echo "  [1] All clients"
+    echo "  [2] Select specific clients"
+    echo "  [3] Filter by pattern"
+    echo ""
+    read -p "Client selection: " od_method
+
+    selected_clients=""
+
+    case "$od_method" in
+        1)
+            selected_clients="$client_list"
+            ;;
+        2)
+            client_count=$(echo "$client_list" | wc -l)
+            clist_height=$client_count
+            if [ "$clist_height" -gt 20 ]; then clist_height=20; fi
+            cheight=$((clist_height + 8))
+
+            set --
+            for client in $client_list; do
+                set -- "$@" "$client" "" OFF
+            done
+
+            selected_clients=$(whiptail --checklist "Select clients (SPACE=select, ENTER=confirm)" $cheight 70 $clist_height "$@" 3>&1 1>&2 2>&3)
+
+            if [ $? -ne 0 ] || [ -z "$selected_clients" ]; then
+                echo "No clients selected."
+                return
+            fi
+            selected_clients=$(echo "$selected_clients" | tr -d '"')
+            ;;
+        3)
+            read -p "Pattern (e.g. raum1 or pc-.*): " pattern
+            selected_clients=$(echo "$client_list" | grep -i "$pattern")
+            if [ -z "$selected_clients" ]; then
+                echo "No clients match pattern."
+                return
+            fi
+            echo "Matching clients:"
+            for c in $selected_clients; do
+                echo "  $c"
+            done
+            echo ""
+            read -p "Continue? (y/N): " confirm
+            if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
+                echo "Aborted."
+                return
+            fi
+            ;;
+        *)
+            echo "Invalid choice."
+            return
+            ;;
+    esac
+
+    if [ -z "$selected_clients" ]; then
+        echo "No clients selected."
+        return
+    fi
+
+    json_clients="["
+    first=1
+    for client in $selected_clients; do
+        if [ "$first" -eq 1 ]; then
+            json_clients="$json_clients\"$client\""
+            first=0
+        else
+            json_clients="$json_clients,\"$client\""
+        fi
+    done
+    json_clients="$json_clients]"
+
+    echo ""
+    echo "Triggering on_demand event..."
+    if LC_ALL=C opsi-admin -d method hostControlSafe_fireEvent "on_demand" "$json_clients" 2>/dev/null; then
+        echo "on_demand event triggered. Clients will install pending packages now."
+    else
+        echo "Failed to trigger event."
+    fi
+}
+
+do_diag() {
+    while true; do
+        echo ""
+        echo "--- Fehleranalyse ---"
+        echo ""
+        echo "  [1] Fehlgeschlagene Aktionen"
+        echo "  [2] Fehlgeschlagene zuruecksetzen"
+        echo "  [3] Client-Status pruefen"
+        echo "  [4] Client-Logs anzeigen"
+        echo "  [5] Software-Inventar"
+        echo "  [6] OPSI-Dienste pruefen"
+        echo "  [7] Festplattenplatz"
+        echo "  [0] Zurueck"
+        echo ""
+        read -p "Select: " diag_choice
+
+        case "$diag_choice" in
+            1) diag_failed ;;
+            2) diag_reset_failed ;;
+            3) diag_client ;;
+            4) diag_logs ;;
+            5) diag_swaudit ;;
+            6) diag_services ;;
+            7) diag_disk ;;
+            0) return ;;
+            *) echo "Invalid choice." ;;
+        esac
+    done
+}
+
+diag_failed() {
+    echo ""
+    echo "--- Fehlgeschlagene Aktionen ---"
+    echo ""
+
+    if ! command -v opsi-admin > /dev/null 2>&1; then
+        echo "ERROR: opsi-admin not found."
+        return
+    fi
+
+    echo "Loading..."
+    failed=$(LC_ALL=C opsi-admin -d method productOnClient_getObjects '[]' '{"actionResult":"failed"}' 2>/dev/null)
+
+    if [ -z "$failed" ] || [ "$failed" = "[]" ]; then
+        echo "Keine fehlgeschlagenen Aktionen."
+        return
+    fi
+
+    echo ""
+    printf "  %-35s %-30s %s\n" "CLIENT" "PRODUKT" "AKTION"
+    echo "  ----------------------------------- ------------------------------ ----------"
+    echo "$failed" | grep -E '"(clientId|productId|lastAction)"' | sed 's/.*: "//;s/".*//' | paste - - - | awk '{printf "  %-35s %-30s %s\n", $2, $1, $3}'
+}
+
+diag_reset_failed() {
+    echo ""
+    echo "--- Fehlgeschlagene zuruecksetzen ---"
+    echo ""
+
+    if ! command -v opsi-admin > /dev/null 2>&1; then
+        echo "ERROR: opsi-admin not found."
+        return
+    fi
+
+    echo "Loading..."
+    failed=$(LC_ALL=C opsi-admin -d method productOnClient_getObjects '[]' '{"actionResult":"failed"}' 2>/dev/null)
+
+    if [ -z "$failed" ] || [ "$failed" = "[]" ]; then
+        echo "Keine fehlgeschlagenen Aktionen."
+        return
+    fi
+
+    # Show what will be reset
+    echo ""
+    printf "  %-35s %s\n" "CLIENT" "PRODUKT"
+    echo "  ----------------------------------- ------------------------------"
+    echo "$failed" | grep -E '"(clientId|productId)"' | sed 's/.*: "//;s/".*//' | paste - - | awk '{printf "  %-35s %s\n", $2, $1}'
+
+    echo ""
+    echo "  [1] Alle auf 'setup' setzen (erneut versuchen)"
+    echo "  [2] Alle auf 'none' setzen (ignorieren)"
+    echo "  [0] Abbrechen"
+    echo ""
+    read -p "Select: " reset_choice
+
+    case "$reset_choice" in
+        1) action="setup" ;;
+        2) action="none" ;;
+        *) echo "Aborted."; return ;;
+    esac
+
+    echo ""
+    echo "Setze alle auf '$action'..."
+
+    # Extract client+product pairs and reset
+    echo "$failed" | grep -E '"(clientId|productId)"' | sed 's/.*: "//;s/".*//' | paste - - | while read -r product_id client_id; do
+        if LC_ALL=C opsi-admin -d method setProductActionRequest "$product_id" "$client_id" "$action" 2>/dev/null; then
+            echo "  OK: $product_id -> $client_id ($action)"
+        else
+            echo "  FAILED: $product_id -> $client_id"
+        fi
+    done
+
+    echo ""
+    echo "Done."
+}
+
+diag_client() {
+    echo ""
+    echo "--- Client-Status ---"
+    echo ""
+
+    read -p "Client-ID (e.g. bio-pc01.paedml-linux.lokal): " client_id
+    if [ -z "$client_id" ]; then
+        echo "Aborted."
+        return
+    fi
+
+    echo ""
+    echo "Loading..."
+
+    # Client info from OPSI
+    client_info=$(LC_ALL=C opsi-admin -d method host_getObjects '[]' "{\"id\":\"$client_id\"}" 2>/dev/null)
+
+    if [ -z "$client_info" ] || [ "$client_info" = "[]" ]; then
+        echo "Client nicht gefunden: $client_id"
+        return
+    fi
+
+    echo ""
+    echo "Client-Info:"
+    ip=$(echo "$client_info" | grep '"ipAddress"' | sed 's/.*: "//;s/".*//')
+    mac=$(echo "$client_info" | grep '"hardwareAddress"' | sed 's/.*: "//;s/".*//')
+    last_seen=$(echo "$client_info" | grep '"lastSeen"' | sed 's/.*: "//;s/".*//')
+    echo "  IP:          ${ip:-unbekannt}"
+    echo "  MAC:         ${mac:-unbekannt}"
+    echo "  Zuletzt gesehen: ${last_seen:-unbekannt}"
+
+    # Reachability
+    echo ""
+    echo "Erreichbarkeit:"
+    if ping -c 1 -W 2 "$client_id" > /dev/null 2>&1; then
+        echo "  ONLINE"
+    else
+        echo "  OFFLINE"
+    fi
+
+    # Pending actions
+    echo ""
+    echo "Ausstehende Aktionen:"
+    pending=$(LC_ALL=C opsi-admin -d method productOnClient_getObjects '[]' "{\"clientId\":\"$client_id\",\"actionRequest\":\"setup\"}" 2>/dev/null)
+    if [ -z "$pending" ] || [ "$pending" = "[]" ]; then
+        echo "  Keine"
+    else
+        echo "$pending" | grep '"productId"' | sed 's/.*: "//;s/".*//' | while read -r p; do
+            echo "  $p (setup)"
+        done
+    fi
+
+    # Failed
+    echo ""
+    echo "Fehlgeschlagen:"
+    failed=$(LC_ALL=C opsi-admin -d method productOnClient_getObjects '[]' "{\"clientId\":\"$client_id\",\"actionResult\":\"failed\"}" 2>/dev/null)
+    if [ -z "$failed" ] || [ "$failed" = "[]" ]; then
+        echo "  Keine"
+    else
+        echo "$failed" | grep '"productId"' | sed 's/.*: "//;s/".*//' | while read -r p; do
+            echo "  $p (FAILED)"
+        done
+    fi
+}
+
+diag_logs() {
+    echo ""
+    echo "--- Client-Logs ---"
+    echo ""
+
+    read -p "Client-ID (e.g. bio-pc01.paedml-linux.lokal): " client_id
+    if [ -z "$client_id" ]; then
+        echo "Aborted."
+        return
+    fi
+
+    echo ""
+    echo "  [1] Installations-Log (instlog)"
+    echo "  [2] Client-Verbindung (clientconnect)"
+    echo "  [3] Boot-Image (bootimage)"
+    echo ""
+    read -p "Log-Typ: " log_choice
+
+    case "$log_choice" in
+        1) log_type="instlog" ;;
+        2) log_type="clientconnect" ;;
+        3) log_type="bootimage" ;;
+        *) echo "Invalid choice."; return ;;
+    esac
+
+    # Try direct file access first (faster)
+    log_file="/var/log/opsi/${log_type}/${client_id}.log"
+    if [ -f "$log_file" ]; then
+        echo ""
+        echo "--- Letzte 50 Zeilen: $log_file ---"
+        echo ""
+        tail -50 "$log_file"
+    else
+        echo ""
+        echo "Loading via opsi-admin..."
+        LC_ALL=C opsi-admin -d method log_read "$log_type" "$client_id" 2>/dev/null | tail -50
+    fi
+}
+
+diag_swaudit() {
+    echo ""
+    echo "--- Software-Inventar ---"
+    echo ""
+
+    if ! command -v opsi-admin > /dev/null 2>&1; then
+        echo "ERROR: opsi-admin not found."
+        return
+    fi
+
+    read -p "Client-ID (e.g. bio-pc01.paedml-linux.lokal): " client_id
+    if [ -z "$client_id" ]; then
+        echo "Aborted."
+        return
+    fi
+
+    echo ""
+    echo "Loading..."
+    sw_list=$(LC_ALL=C opsi-admin -d method auditSoftwareOnClient_getObjects '[]' "{\"clientId\":\"$client_id\"}" 2>/dev/null)
+
+    if [ -z "$sw_list" ] || [ "$sw_list" = "[]" ]; then
+        echo "Kein Software-Inventar fuer $client_id"
+        return
+    fi
+
+    echo ""
+    echo "Installierte Software auf $client_id:"
+    echo ""
+    echo "$sw_list" | grep '"name"' | sed 's/.*: "//;s/".*//' | sort -u | while read -r name; do
+        echo "  $name"
+    done
+}
+
+diag_services() {
+    echo ""
+    echo "--- OPSI-Dienste ---"
+    echo ""
+
+    for svc in opsiconfd opsipxeconfd; do
+        status=$(systemctl is-active "$svc" 2>/dev/null)
+        if [ "$status" = "active" ]; then
+            echo "  $svc: RUNNING"
+        else
+            echo "  $svc: $status"
+        fi
+    done
+
+    echo ""
+    echo "opsiconfd Info:"
+    if command -v opsiconfd > /dev/null 2>&1; then
+        opsiconfd --version 2>/dev/null || echo "  Version nicht ermittelbar"
+    fi
+
+    echo ""
+    echo "Backend-Verbindung:"
+    if LC_ALL=C opsi-admin -d method backend_info > /dev/null 2>&1; then
+        echo "  OK"
+    else
+        echo "  FEHLER"
+    fi
+}
+
+diag_disk() {
+    echo ""
+    echo "--- Festplattenplatz ---"
+    echo ""
+
+    echo "Depot/Workbench:"
+    df -h /var/lib/opsi 2>/dev/null || echo "  /var/lib/opsi nicht gefunden"
+
+    echo ""
+    echo "Workbench-Groesse:"
+    if [ -d "$WORKBENCH" ]; then
+        du -sh "$WORKBENCH" 2>/dev/null
+    else
+        echo "  Workbench nicht vorhanden"
+    fi
+
+    echo ""
+    echo "Repository-Groesse:"
+    if [ -d "/var/lib/opsi/repository" ]; then
+        du -sh /var/lib/opsi/repository 2>/dev/null
+    else
+        echo "  Repository nicht vorhanden"
+    fi
+}
+
 do_list() {
     echo ""
     echo "--- Installed OPSI Packages ---"
@@ -373,7 +882,10 @@ while true; do
     echo "  [1] Create package"
     echo "  [2] Remove package"
     echo "  [3] Deploy to clients"
-    echo "  [4] List packages"
+    echo "  [4] Wake-on-LAN"
+    echo "  [5] On-Demand Installation"
+    echo "  [6] List packages"
+    echo "  [7] Fehleranalyse"
     echo "  [0] Exit"
     echo ""
     read -p "Select: " choice
@@ -382,7 +894,10 @@ while true; do
         1) do_create ;;
         2) do_remove ;;
         3) do_deploy ;;
-        4) do_list ;;
+        4) do_wol ;;
+        5) do_ondemand ;;
+        6) do_list ;;
+        7) do_diag ;;
         0) echo "Bye."; exit 0 ;;
         *) echo "Invalid choice." ;;
     esac
