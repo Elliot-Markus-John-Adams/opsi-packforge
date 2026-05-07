@@ -24,10 +24,10 @@ do_create() {
     # Product ID
     while true; do
         read -p "Product ID (e.g. my-software): " product_id
-        if echo "$product_id" | grep -qE '^[a-z0-9][a-z0-9-]*$'; then
+        if echo "$product_id" | grep -qE '^[a-z0-9][a-z0-9._-]*$'; then
             break
         fi
-        echo "Invalid product ID. Use lowercase letters, numbers, and hyphens."
+        echo "Invalid product ID. Use lowercase letters, numbers, hyphens, dots, underscores."
     done
 
     # Product name
@@ -45,10 +45,130 @@ do_create() {
     # Description
     read -p "Description: " description
 
-    # Create directories
+    # Advice
+    read -p "Advice (e.g. 'Requires .NET 4.8'): " advice
+
+    # Priority
+    read -p "Priority (-100 to 100) [0]: " priority
+    priority="${priority:-0}"
+
+    # --- Dependencies ---
+    dep_blocks=""
+    echo ""
+    read -p "Add package dependencies? (y/N): " add_deps
+    if [ "$add_deps" = "y" ] || [ "$add_deps" = "Y" ]; then
+        if command -v whiptail > /dev/null 2>&1 && command -v opsi-package-manager > /dev/null 2>&1; then
+            echo "Loading packages..."
+            dep_pkg_list=$(LC_ALL=C opsi-package-manager -l 2>/dev/null | awk '/^   [a-z0-9]/ {print $1}')
+
+            if [ -n "$dep_pkg_list" ]; then
+                dep_count=$(echo "$dep_pkg_list" | wc -l)
+                dep_lh=$dep_count
+                if [ "$dep_lh" -gt 20 ]; then dep_lh=20; fi
+                dep_h=$((dep_lh + 8))
+
+                set --
+                for dp in $dep_pkg_list; do
+                    set -- "$@" "$dp" "" OFF
+                done
+
+                selected_deps=$(whiptail --checklist "Select dependencies (must be installed before this package)" $dep_h 60 $dep_lh "$@" 3>&1 1>&2 2>&3)
+                selected_deps=$(echo "$selected_deps" | tr -d '"')
+
+                for dep in $selected_deps; do
+                    dep_blocks="$dep_blocks
+[ProductDependency]
+action: setup
+requiredProduct: $dep
+requiredStatus: installed
+requirementType: before
+"
+                done
+            fi
+        else
+            echo "whiptail or opsi-package-manager not found, skipping."
+        fi
+    fi
+
+    # --- Properties ---
+    prop_blocks=""
+    echo ""
+    read -p "Add product properties? (y/N): " add_props
+    while [ "$add_props" = "y" ] || [ "$add_props" = "Y" ]; do
+        echo ""
+        echo "  Property type:"
+        echo "  [1] bool (True/False toggle)"
+        echo "  [2] unicode (text/selection)"
+        read -p "  Select: " prop_type_choice
+
+        case "$prop_type_choice" in
+            1)
+                read -p "  Property name (e.g. desktop_shortcut): " prop_name
+                read -p "  Description: " prop_desc
+                read -p "  Default (True/False) [False]: " prop_default
+                prop_default="${prop_default:-False}"
+                prop_blocks="$prop_blocks
+[ProductProperty]
+type: bool
+name: $prop_name
+description: $prop_desc
+default: $prop_default
+"
+                ;;
+            2)
+                read -p "  Property name (e.g. install_language): " prop_name
+                read -p "  Description: " prop_desc
+                read -p "  Possible values (comma-separated, e.g. de,en,fr): " prop_vals_raw
+                read -p "  Default value: " prop_def_raw
+                read -p "  Allow multiple values? (y/N): " prop_multi
+                read -p "  Allow custom values? (y/N): " prop_edit
+
+                # Format values as JSON list
+                prop_values=""
+                IFS=','
+                for v in $prop_vals_raw; do
+                    v=$(echo "$v" | sed 's/^ *//;s/ *$//')
+                    if [ -z "$prop_values" ]; then
+                        prop_values="\"$v\""
+                    else
+                        prop_values="$prop_values, \"$v\""
+                    fi
+                done
+                unset IFS
+
+                multi="False"
+                if [ "$prop_multi" = "y" ] || [ "$prop_multi" = "Y" ]; then
+                    multi="True"
+                fi
+                edit="False"
+                if [ "$prop_edit" = "y" ] || [ "$prop_edit" = "Y" ]; then
+                    edit="True"
+                fi
+
+                prop_blocks="$prop_blocks
+[ProductProperty]
+type: unicode
+name: $prop_name
+multivalue: $multi
+editable: $edit
+description: $prop_desc
+values: [$prop_values]
+default: [\"$prop_def_raw\"]
+"
+                ;;
+            *)
+                echo "  Invalid choice."
+                ;;
+        esac
+
+        read -p "Add another property? (y/N): " add_props
+    done
+
+    # --- Create directories ---
     package_dir="$WORKBENCH/$product_id"
     opsi_dir="$package_dir/OPSI"
     client_dir="$package_dir/CLIENT_DATA"
+    files_dir="$client_dir/files"
 
     if [ -d "$package_dir" ]; then
         echo ""
@@ -60,9 +180,9 @@ do_create() {
         fi
     fi
 
-    mkdir -p "$opsi_dir" "$client_dir"
+    mkdir -p "$opsi_dir" "$client_dir" "$files_dir"
 
-    # Write control file
+    # --- Write control file ---
     cat > "$opsi_dir/control" << CTRL
 [Package]
 version: $package_version
@@ -73,13 +193,13 @@ type: localboot
 id: $product_id
 name: $product_name
 description: $description
-advice:
+advice: $advice
 version: $product_version
-priority: 0
+priority: $priority
 licenseRequired: False
 productClasses:
-setupScript: setup.ins
-uninstallScript: uninstall.ins
+setupScript: setup.opsiscript
+uninstallScript: uninstall.opsiscript
 updateScript:
 alwaysScript:
 onceScript:
@@ -87,38 +207,81 @@ customScript:
 userLoginScript:
 CTRL
 
-    # Write setup.ins
-    cat > "$client_dir/setup.ins" << SETUP
-; setup script for $product_name
+    # Append dependencies
+    if [ -n "$dep_blocks" ]; then
+        echo "$dep_blocks" >> "$opsi_dir/control"
+    fi
+
+    # Append properties
+    if [ -n "$prop_blocks" ]; then
+        echo "$prop_blocks" >> "$opsi_dir/control"
+    fi
+
+    # --- Write setup.opsiscript ---
+    cat > "$client_dir/setup.opsiscript" << 'SETUP'
+; setup script for PRODUCTNAME
 ; generated by Packforge
 
 [Actions]
 requiredWinstVersion >= "4.11.4.1"
 
-DefVar \$ProductId\$
-Set \$ProductId\$ = "$product_id"
+DefVar $ProductId$
+DefVar $InstallDir$
+DefVar $Setupfile$
 
-Message "Installing " + \$ProductId\$ + " ..."
+Set $ProductId$ = EnvVar("PRODUCT_ID")
+Set $InstallDir$ = "%ProgramFiles32Dir%\" + $ProductId$
+Set $Setupfile$ = "%ScriptPath%\files\setup.exe"
 
-; Add installation steps here
+Message "Installing " + $ProductId$ + " ..."
+
+; Example: silent install from files/ directory
+; Winbatch_Install
+
+; Example: copy files
+; Files_Install
+
+; [Winbatch_Install]
+; $Setupfile$ /S /D=$InstallDir$
+
+; [Files_Install]
+; copy -s "%ScriptPath%\files\*" "$InstallDir$"
 SETUP
+    sed -i "s/PRODUCTNAME/$product_name/g" "$client_dir/setup.opsiscript"
 
-    # Write uninstall.ins
-    cat > "$client_dir/uninstall.ins" << UNINST
-; uninstall script for $product_name
+    # --- Write uninstall.opsiscript ---
+    cat > "$client_dir/uninstall.opsiscript" << 'UNINST'
+; uninstall script for PRODUCTNAME
 ; generated by Packforge
 
 [Actions]
 requiredWinstVersion >= "4.11.4.1"
 
-DefVar \$ProductId\$
-Set \$ProductId\$ = "$product_id"
+DefVar $ProductId$
+DefVar $InstallDir$
+DefVar $UninstallProgram$
 
-Message "Uninstalling " + \$ProductId\$ + " ..."
+Set $ProductId$ = EnvVar("PRODUCT_ID")
+Set $InstallDir$ = "%ProgramFiles32Dir%\" + $ProductId$
+Set $UninstallProgram$ = $InstallDir$ + "\uninstall.exe"
 
-; Add uninstallation steps here
+Message "Uninstalling " + $ProductId$ + " ..."
+
+; Example: silent uninstall
+; Winbatch_Uninstall
+
+; Example: remove directory
+; Files_Uninstall
+
+; [Winbatch_Uninstall]
+; $UninstallProgram$ /S
+
+; [Files_Uninstall]
+; del -sf "$InstallDir$"
 UNINST
+    sed -i "s/PRODUCTNAME/$product_name/g" "$client_dir/uninstall.opsiscript"
 
+    # --- Show result ---
     echo ""
     echo "Package created: $package_dir"
     echo ""
@@ -126,13 +289,15 @@ UNINST
     echo "  ├── OPSI/"
     echo "  │   └── control"
     echo "  └── CLIENT_DATA/"
-    echo "      ├── setup.ins"
-    echo "      └── uninstall.ins"
+    echo "      ├── files/"
+    echo "      │   └── (place installers here)"
+    echo "      ├── setup.opsiscript"
+    echo "      └── uninstall.opsiscript"
     echo ""
-    echo "Place your installer files into CLIENT_DATA:"
+    echo "Place your installer files into CLIENT_DATA/files/:"
     echo ""
-    printf '  SMB: \\\\%s\\opsi_workbench\\%s\\CLIENT_DATA\\\n' "$(hostname -f)" "$product_id"
-    echo "  SCP: scp <file> root@$(hostname -f):$client_dir/"
+    printf '  SMB: \\\\%s\\opsi_workbench\\%s\\CLIENT_DATA\\files\\\n' "$(hostname -f)" "$product_id"
+    echo "  SCP: scp <file> root@$(hostname -f):$files_dir/"
     echo ""
     read -p "Press ENTER when files are in place (or 's' to skip build)... " wait_input
 
@@ -145,6 +310,8 @@ UNINST
     echo ""
     echo "Files in CLIENT_DATA:"
     ls -la "$client_dir"
+    echo "Files in CLIENT_DATA/files:"
+    ls -la "$files_dir"
     echo ""
     read -p "Continue with build and install? (y/N): " build_confirm
     if [ "$build_confirm" != "y" ] && [ "$build_confirm" != "Y" ]; then
