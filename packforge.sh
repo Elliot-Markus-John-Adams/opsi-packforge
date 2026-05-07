@@ -636,16 +636,27 @@ do_wol() {
 
     online=0
     offline=0
+    online_list=""
+    offline_list=""
     for client in $selected_clients; do
-        # Check if this client is reachable (format: "client.fqdn": true)
         is_online=$(echo "$reach_result" | grep -F "\"$client\"" | grep -c 'true')
         if [ "$is_online" -gt 0 ]; then
             online=$((online + 1))
+            online_list="$online_list  ONLINE:  $client
+"
         else
             offline=$((offline + 1))
-            echo "  OFFLINE: $client"
+            offline_list="$offline_list  OFFLINE: $client
+"
         fi
     done
+
+    if [ -n "$online_list" ]; then
+        printf "%s" "$online_list"
+    fi
+    if [ -n "$offline_list" ]; then
+        printf "%s" "$offline_list"
+    fi
 
     echo ""
     echo "Online: $online/$client_num"
