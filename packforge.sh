@@ -120,21 +120,24 @@ Message "Uninstalling " + \$ProductId\$ + " ..."
 UNINST
 
     echo ""
-    echo "Package structure created: $package_dir"
-    echo "  OPSI/control"
-    echo "  CLIENT_DATA/setup.ins"
-    echo "  CLIENT_DATA/uninstall.ins"
+    echo "Package created: $package_dir"
     echo ""
-    echo "Place your installer files (setup.exe, MSI, etc.) into:"
-    echo "  $client_dir"
+    echo "  $product_id/"
+    echo "  ├── OPSI/"
+    echo "  │   └── control"
+    echo "  └── CLIENT_DATA/"
+    echo "      ├── setup.ins"
+    echo "      └── uninstall.ins"
     echo ""
-    echo "Via SMB:  \\\\$(hostname -f)\\opsi_workbench\\$product_id\\CLIENT_DATA\\"
-    echo "Via SCP:  scp <file> root@$(hostname -f):$client_dir/"
+    echo "Place your installer files into CLIENT_DATA:"
+    echo ""
+    printf '  SMB: \\\\%s\\opsi_workbench\\%s\\CLIENT_DATA\\\n' "$(hostname -f)" "$product_id"
+    echo "  SCP: scp <file> root@$(hostname -f):$client_dir/"
     echo ""
     read -p "Press ENTER when files are in place (or 's' to skip build)... " wait_input
 
     if [ "$wait_input" = "s" ] || [ "$wait_input" = "S" ]; then
-        echo "Skipped build. You can build later."
+        echo "Skipped build. Add files and build later."
         return
     fi
 
