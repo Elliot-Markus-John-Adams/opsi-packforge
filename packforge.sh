@@ -450,12 +450,58 @@ do_wol() {
     done
     json_clients="$json_clients]"
 
+    # Count clients
+    client_num=0
+    for _ in $selected_clients; do client_num=$((client_num + 1)); done
+
     echo ""
-    echo "Sending Wake-on-LAN..."
-    if LC_ALL=C opsi-admin -d method hostControlSafe_start "$json_clients" 2>/dev/null; then
-        echo "WoL packets sent."
-    else
+    echo "Sending Wake-on-LAN to $client_num client(s)..."
+    wol_result=$(LC_ALL=C opsi-admin -d method hostControlSafe_start "$json_clients" 2>/dev/null)
+
+    if [ $? -ne 0 ]; then
         echo "WoL failed."
+        return
+    fi
+
+    # Count sent vs errors
+    sent=$(echo "$wol_result" | grep -c '"result": "sent"')
+    errors=$(echo "$wol_result" | grep '"error"' | grep -vc 'null')
+    echo "WoL packets sent: $sent/$client_num"
+    if [ "$errors" -gt 0 ]; then
+        echo "Errors: $errors"
+        echo "$wol_result" | grep -B2 '"error"' | grep -v 'null' | grep -v '^--$'
+    fi
+
+    echo ""
+    read -p "Check which clients came online? (y/N): " check_online
+    if [ "$check_online" != "y" ] && [ "$check_online" != "Y" ]; then
+        return
+    fi
+
+    echo ""
+    echo "Waiting 60 seconds for clients to boot..."
+    sleep 60
+
+    echo "Checking reachability..."
+    reach_result=$(LC_ALL=C opsi-admin -d method hostControlSafe_reachable "$json_clients" 2>/dev/null)
+
+    online=0
+    offline=0
+    for client in $selected_clients; do
+        # Check if this client has result: true
+        is_online=$(echo "$reach_result" | grep -A2 "\"$client\"" | grep '"result"' | grep -c 'true')
+        if [ "$is_online" -gt 0 ]; then
+            online=$((online + 1))
+        else
+            offline=$((offline + 1))
+            echo "  OFFLINE: $client"
+        fi
+    done
+
+    echo ""
+    echo "Online: $online/$client_num"
+    if [ "$offline" -gt 0 ]; then
+        echo "Offline: $offline/$client_num"
     fi
 }
 
