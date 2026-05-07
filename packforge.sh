@@ -837,6 +837,94 @@ diag_disk() {
     fi
 }
 
+do_build() {
+    echo ""
+    echo "--- Build & Install Package ---"
+    echo ""
+
+    if ! command -v opsi-makepackage > /dev/null 2>&1; then
+        echo "ERROR: opsi-makepackage not found."
+        return
+    fi
+
+    if ! command -v whiptail > /dev/null 2>&1; then
+        echo "ERROR: whiptail not found."
+        return
+    fi
+
+    # List workbench packages
+    if [ ! -d "$WORKBENCH" ]; then
+        echo "Workbench not found: $WORKBENCH"
+        return
+    fi
+
+    pkg_list=""
+    for dir in "$WORKBENCH"/*/; do
+        if [ -f "${dir}OPSI/control" ]; then
+            pkg_list="$pkg_list $(basename "$dir")"
+        fi
+    done
+
+    if [ -z "$pkg_list" ]; then
+        echo "No packages in workbench."
+        return
+    fi
+
+    pkg_count=0
+    for _ in $pkg_list; do pkg_count=$((pkg_count + 1)); done
+    list_height=$pkg_count
+    if [ "$list_height" -gt 20 ]; then list_height=20; fi
+    height=$((list_height + 8))
+
+    set --
+    for pkg in $pkg_list; do
+        set -- "$@" "$pkg" "" OFF
+    done
+
+    selected_pkgs=$(whiptail --checklist "Select packages to build (SPACE=select, ENTER=confirm)" $height 60 $list_height "$@" 3>&1 1>&2 2>&3)
+
+    if [ $? -ne 0 ] || [ -z "$selected_pkgs" ]; then
+        echo "No packages selected."
+        return
+    fi
+
+    selected_pkgs=$(echo "$selected_pkgs" | tr -d '"')
+
+    for pkg in $selected_pkgs; do
+        package_dir="$WORKBENCH/$pkg"
+
+        echo ""
+        echo "--- $pkg ---"
+        echo "Files in CLIENT_DATA:"
+        ls "$package_dir/CLIENT_DATA/" 2>/dev/null
+        echo ""
+
+        echo "Building..."
+        if (cd "$package_dir" && opsi-makepackage --quiet --no-md5 --no-zsync); then
+            echo "Build successful."
+        else
+            echo "Build failed."
+            continue
+        fi
+
+        opsi_file=$(ls -t "$package_dir"/*.opsi 2>/dev/null | head -1)
+        if [ -z "$opsi_file" ]; then
+            echo "ERROR: No .opsi file found."
+            continue
+        fi
+
+        echo "Installing..."
+        if LC_ALL=C opsi-package-manager -i "$opsi_file" 2>/dev/null; then
+            echo "Package installed."
+        else
+            echo "Install failed."
+        fi
+    done
+
+    echo ""
+    echo "Done."
+}
+
 do_list() {
     echo ""
     echo "--- Installed OPSI Packages ---"
@@ -855,22 +943,24 @@ banner
 
 while true; do
     echo "  [1] Create package"
-    echo "  [2] Remove package"
-    echo "  [3] Deploy to clients"
-    echo "  [4] Wake-on-LAN"
-    echo "  [5] List packages"
-    echo "  [6] Fehleranalyse"
+    echo "  [2] Build package"
+    echo "  [3] Remove package"
+    echo "  [4] Deploy to clients"
+    echo "  [5] Wake-on-LAN"
+    echo "  [6] List packages"
+    echo "  [7] Fehleranalyse"
     echo "  [0] Exit"
     echo ""
     read -p "Select: " choice
 
     case "$choice" in
         1) do_create ;;
-        2) do_remove ;;
-        3) do_deploy ;;
-        4) do_wol ;;
-        5) do_list ;;
-        6) do_diag ;;
+        2) do_build ;;
+        3) do_remove ;;
+        4) do_deploy ;;
+        5) do_wol ;;
+        6) do_list ;;
+        7) do_diag ;;
         0) echo "Bye."; exit 0 ;;
         *) echo "Invalid choice." ;;
     esac
