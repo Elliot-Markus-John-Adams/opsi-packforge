@@ -1068,41 +1068,44 @@ do_update() {
         return
     fi
 
-    # --- Show configured repositories ---
-    echo "Configured repositories:"
+    # --- Load configured repositories ---
     run_spin "Loading repositories..." env LC_ALL=C opsi-package-updater list --active-repos
     repo_raw=$SPIN_OUT
-    if [ -z "$repo_raw" ]; then
-        echo "  (none active, or repositories could not be queried)"
-    else
-        echo "$repo_raw" | sed 's/^/  /'
-    fi
 
-    # Parse repo names from lines like "name: http://..."
-    repo_list=$(echo "$repo_raw" | awk -F: '/:[[:space:]]*http/ {id=$1; gsub(/[[:space:]]/,"",id); print id}')
-
-    # --- Optionally limit to a single repository ---
+    # --- Choose repository via whiptail menu (name + URL), or "ALL" ---
     repo_filter=""
-    if command -v whiptail > /dev/null 2>&1 && [ -n "$repo_list" ]; then
-        echo ""
-        read -p "Limit to a single repository? (y/N): " limit_repo
-        if [ "$limit_repo" = "y" ] || [ "$limit_repo" = "Y" ]; then
-            r_count=$(echo "$repo_list" | wc -l)
+    if command -v whiptail > /dev/null 2>&1; then
+        set -- "ALL" "use all repositories"
+        while IFS= read -r line; do
+            [ -z "$line" ] && continue
+            r_name=${line%%:*}
+            r_name=$(echo "$r_name" | tr -d '[:space:]')
+            r_url=${line#*: }
+            r_url=$(echo "$r_url" | sed 's/[[:space:]]*$//')
+            set -- "$@" "$r_name" "$r_url"
+        done <<< "$(echo "$repo_raw" | grep -E ':[[:space:]]*http')"
+
+        if [ "$#" -gt 2 ]; then
+            r_count=$(( $# / 2 ))
             r_lh=$r_count
             if [ "$r_lh" -gt 20 ]; then r_lh=20; fi
             r_h=$((r_lh + 8))
 
-            set --
-            for r in $repo_list; do
-                set -- "$@" "$r" ""
-            done
-
-            chosen_repo=$(whiptail --menu "Select repository" $r_h 70 $r_lh "$@" 3>&1 1>&2 2>&3)
-            if [ -n "$chosen_repo" ]; then
-                repo_filter="--repo $chosen_repo"
-                echo "Scoped to repository: $chosen_repo"
+            chosen_repo=$(whiptail --menu "Select repository to work with" $r_h 78 $r_lh "$@" 3>&1 1>&2 2>&3)
+            if [ $? -ne 0 ]; then
+                echo "Aborted."
+                return
             fi
+            if [ -n "$chosen_repo" ] && [ "$chosen_repo" != "ALL" ]; then
+                repo_filter="--repo $chosen_repo"
+            fi
+        else
+            echo "No active repositories found."
+            echo "$repo_raw" | sed 's/^/  /'
         fi
+    else
+        echo "Configured repositories:"
+        echo "$repo_raw" | sed 's/^/  /'
     fi
 
     # --- Show updatable products ---
