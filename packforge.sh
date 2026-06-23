@@ -1038,6 +1038,26 @@ do_list() {
     LC_ALL=C opsi-package-manager -l
 }
 
+# Run a command with a spinner while it works; captured output goes to $SPIN_OUT
+run_spin() {
+    msg=$1
+    shift
+    tmpf=$(mktemp)
+    "$@" > "$tmpf" 2>&1 &
+    sp_pid=$!
+    sp_chars='|/-\'
+    sp_i=0
+    while kill -0 "$sp_pid" 2>/dev/null; do
+        sp_i=$(( (sp_i + 1) % 4 ))
+        printf '\r  [%s] %s' "${sp_chars:$sp_i:1}" "$msg"
+        sleep 0.2
+    done
+    wait "$sp_pid"
+    printf '\r%*s\r' $(( ${#msg} + 8 )) ''
+    SPIN_OUT=$(cat "$tmpf")
+    rm -f "$tmpf"
+}
+
 do_update() {
     echo ""
     echo "--- Update Packages from Repository ---"
@@ -1050,7 +1070,8 @@ do_update() {
 
     # --- Show configured repositories ---
     echo "Configured repositories:"
-    repo_raw=$(LC_ALL=C opsi-package-updater list --active-repos 2>&1)
+    run_spin "Loading repositories..." env LC_ALL=C opsi-package-updater list --active-repos
+    repo_raw=$SPIN_OUT
     if [ -z "$repo_raw" ]; then
         echo "  (none active, or repositories could not be queried)"
     else
@@ -1086,8 +1107,8 @@ do_update() {
 
     # --- Show updatable products ---
     echo ""
-    echo "Checking for updatable products..."
-    upd_raw=$(LC_ALL=C opsi-package-updater $repo_filter list --updatable-products 2>&1)
+    run_spin "Checking for updatable products..." env LC_ALL=C opsi-package-updater $repo_filter list --updatable-products
+    upd_raw=$SPIN_OUT
     echo ""
     echo "Updatable products:"
     if [ -n "$upd_raw" ]; then
@@ -1207,11 +1228,11 @@ do_update() {
             ;;
         5)
             echo ""
-            echo "Loading all available products (this may take a moment)..."
-            all_raw=$(LC_ALL=C opsi-package-updater $repo_filter list --products 2>&1)
+            run_spin "Loading all available products..." env LC_ALL=C opsi-package-updater $repo_filter list --products
+            all_raw=$SPIN_OUT
 
-            # Parse product ids from lines like "7zip: 26.01-1 in <repo>"
-            all_list=$(echo "$all_raw" | awk -F: '/ in / {id=$1; gsub(/[[:space:]]/,"",id); if (id ~ /^[a-z0-9]/) print id}' | sort -u)
+            # Parse product ids from lines like "      7zip (Version 26.01-1)"
+            all_list=$(echo "$all_raw" | awk '/\(Version/ {print $1}' | sort -u)
 
             if [ -z "$all_list" ]; then
                 echo "No products found. Raw output:"
