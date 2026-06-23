@@ -1108,7 +1108,8 @@ do_update() {
     echo "  [1] Update all installed packages (update)"
     echo "  [2] Install all updatable packages (install)"
     echo "  [3] Download all updatable packages (download only)"
-    echo "  [4] Select specific products..."
+    echo "  [4] Select specific updatable products..."
+    echo "  [5] Browse ALL available products (incl. new)..."
     echo "  [0] Back"
     echo ""
     read -p "Select: " upd_choice
@@ -1160,6 +1161,71 @@ do_update() {
             done
 
             selected_prods=$(whiptail --checklist "Select products (SPACE=select, ENTER=confirm)" $p_h 70 $p_lh "$@" 3>&1 1>&2 2>&3)
+            if [ $? -ne 0 ] || [ -z "$selected_prods" ]; then
+                echo "Nothing selected."
+                return
+            fi
+            selected_prods=$(echo "$selected_prods" | tr -d '"')
+
+            echo ""
+            echo "Selected products:"
+            for p in $selected_prods; do
+                echo "  $p"
+            done
+
+            echo ""
+            echo "  [1] Download only"
+            echo "  [2] Download and install"
+            echo ""
+            read -p "Action: " prod_action
+            case "$prod_action" in
+                1) sub="download" ;;
+                2) sub="install" ;;
+                *) echo "Aborted."; return ;;
+            esac
+
+            if [ "$sub" = "install" ]; then
+                echo ""
+                echo "WARNING: This will INSTALL the selected packages onto the OPSI depot."
+                read -p "Proceed? (y/N): " confirm
+                if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
+                    echo "Aborted."
+                    return
+                fi
+            fi
+
+            LC_ALL=C opsi-package-updater $repo_filter -v $sub $selected_prods
+            ;;
+        5)
+            echo ""
+            echo "Loading all available products (this may take a moment)..."
+            all_raw=$(LC_ALL=C opsi-package-updater $repo_filter list --products 2>&1)
+
+            # Parse product ids from lines like "7zip: 26.01-1 in <repo>"
+            all_list=$(echo "$all_raw" | awk -F: '/ in / {id=$1; gsub(/[[:space:]]/,"",id); if (id ~ /^[a-z0-9]/) print id}' | sort -u)
+
+            if [ -z "$all_list" ]; then
+                echo "No products found. Raw output:"
+                echo "$all_raw" | sed 's/^/  /'
+                return
+            fi
+
+            if ! command -v whiptail > /dev/null 2>&1; then
+                echo "ERROR: whiptail not found."
+                return
+            fi
+
+            a_count=$(echo "$all_list" | wc -l)
+            a_lh=$a_count
+            if [ "$a_lh" -gt 20 ]; then a_lh=20; fi
+            a_h=$((a_lh + 8))
+
+            set --
+            for p in $all_list; do
+                set -- "$@" "$p" "" OFF
+            done
+
+            selected_prods=$(whiptail --checklist "Select products to fetch ($a_count available, SPACE=select, ENTER=confirm)" $a_h 70 $a_lh "$@" 3>&1 1>&2 2>&3)
             if [ $? -ne 0 ] || [ -z "$selected_prods" ]; then
                 echo "Nothing selected."
                 return
