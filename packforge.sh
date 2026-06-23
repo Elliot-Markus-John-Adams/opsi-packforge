@@ -1050,18 +1050,15 @@ do_update() {
 
     # --- Show configured repositories ---
     echo "Configured repositories:"
-    repo_raw=$(LC_ALL=C opsi-package-updater list --active-repos 2>/dev/null)
+    repo_raw=$(LC_ALL=C opsi-package-updater list --active-repos 2>&1)
     if [ -z "$repo_raw" ]; then
         echo "  (none active, or repositories could not be queried)"
     else
         echo "$repo_raw" | sed 's/^/  /'
     fi
 
-    # Parse repo names from lines like "   name: http://..."
-    repo_list=$(echo "$repo_raw" \
-        | grep -oE '^[[:space:]]*[A-Za-z0-9_.-]+[[:space:]]*:' \
-        | tr -d ' :' \
-        | grep -viE '^(active|repositor|http|https)$')
+    # Parse repo names from lines like "name: http://..."
+    repo_list=$(echo "$repo_raw" | awk -F: '/:[[:space:]]*http/ {id=$1; gsub(/[[:space:]]/,"",id); print id}')
 
     # --- Optionally limit to a single repository ---
     repo_filter=""
@@ -1090,15 +1087,15 @@ do_update() {
     # --- Show updatable products ---
     echo ""
     echo "Checking for updatable products..."
-    upd_raw=$(LC_ALL=C opsi-package-updater $repo_filter list --updatable-products 2>/dev/null)
+    upd_raw=$(LC_ALL=C opsi-package-updater $repo_filter list --updatable-products 2>&1)
     echo ""
     echo "Updatable products:"
     if [ -n "$upd_raw" ]; then
         echo "$upd_raw" | sed 's/^/  /'
     fi
 
-    # Parse product ids (indented lines starting with a lowercase id, as in opsi-package-manager -l)
-    upd_list=$(echo "$upd_raw" | awk '/^[[:space:]]+[a-z0-9]/ {print $1}' | tr -d ':' | sort -u)
+    # Parse product ids from lines like "7zip: 26.01-1 in <repo> (updatable from: 26.00-1)"
+    upd_list=$(echo "$upd_raw" | awk -F: '/\(updatable from:/ {id=$1; gsub(/[[:space:]]/,"",id); print id}' | sort -u)
 
     if [ -z "$upd_list" ]; then
         echo ""
