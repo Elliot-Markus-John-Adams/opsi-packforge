@@ -1105,11 +1105,11 @@ do_update() {
 
     # --- Action menu ---
     echo ""
-    echo "  [1] Update all installed packages (update)"
-    echo "  [2] Install all updatable packages (install)"
-    echo "  [3] Download all updatable packages (download only)"
+    echo "  [1] Update already-installed packages (update)"
+    echo "  [2] Install ALL repo packages (whole catalog!)"
+    echo "  [3] Download ALL repo packages (whole catalog, no install)"
     echo "  [4] Select specific updatable products..."
-    echo "  [5] Browse ALL available products (incl. new)..."
+    echo "  [5] Browse/pick ALL available products (incl. new)..."
     echo "  [0] Back"
     echo ""
     read -p "Select: " upd_choice
@@ -1127,8 +1127,10 @@ do_update() {
             ;;
         2)
             echo ""
-            echo "WARNING: This INSTALLS all updatable packages on the depot from the repository."
-            read -p "Proceed? (y/N): " confirm
+            echo "WARNING: This downloads AND INSTALLS the ENTIRE repo catalog onto the"
+            echo "depot (every package not already present - can be many GB and many products)."
+            echo "To install only specific products, use [5] instead."
+            read -p "Really install the whole catalog? (y/N): " confirm
             if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
                 echo "Aborted."
                 return
@@ -1137,7 +1139,14 @@ do_update() {
             ;;
         3)
             echo ""
-            echo "Downloading all updatable packages (no install)..."
+            echo "WARNING: This downloads the ENTIRE repo catalog (every package not already"
+            echo "present - can be many GB, including the Windows images). No install."
+            echo "To download only specific products, use [5] instead."
+            read -p "Really download the whole catalog? (y/N): " confirm
+            if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
+                echo "Aborted."
+                return
+            fi
             LC_ALL=C opsi-package-updater $repo_filter -v download
             ;;
         4)
