@@ -1054,7 +1054,8 @@ run_spin() {
     done
     wait "$sp_pid"
     printf '\r%*s\r' $(( ${#msg} + 8 )) ''
-    SPIN_OUT=$(cat "$tmpf")
+    # Strip ANSI color escape codes (opsi-package-updater colorizes its output)
+    SPIN_OUT=$(sed $'s/\x1b\\[[0-9;]*[A-Za-z]//g' "$tmpf")
     rm -f "$tmpf"
 }
 
