@@ -1038,6 +1038,179 @@ do_list() {
     LC_ALL=C opsi-package-manager -l
 }
 
+do_update() {
+    echo ""
+    echo "--- Update Packages from Repository ---"
+    echo ""
+
+    if ! command -v opsi-package-updater > /dev/null 2>&1; then
+        echo "ERROR: opsi-package-updater not found. Is this the OPSI depot server?"
+        return
+    fi
+
+    # --- Show configured repositories ---
+    echo "Configured repositories:"
+    repo_raw=$(LC_ALL=C opsi-package-updater list --active-repos 2>/dev/null)
+    if [ -z "$repo_raw" ]; then
+        echo "  (none active, or repositories could not be queried)"
+    else
+        echo "$repo_raw" | sed 's/^/  /'
+    fi
+
+    # Parse repo names from lines like "   name: http://..."
+    repo_list=$(echo "$repo_raw" \
+        | grep -oE '^[[:space:]]*[A-Za-z0-9_.-]+[[:space:]]*:' \
+        | tr -d ' :' \
+        | grep -viE '^(active|repositor|http|https)$')
+
+    # --- Optionally limit to a single repository ---
+    repo_filter=""
+    if command -v whiptail > /dev/null 2>&1 && [ -n "$repo_list" ]; then
+        echo ""
+        read -p "Limit to a single repository? (y/N): " limit_repo
+        if [ "$limit_repo" = "y" ] || [ "$limit_repo" = "Y" ]; then
+            r_count=$(echo "$repo_list" | wc -l)
+            r_lh=$r_count
+            if [ "$r_lh" -gt 20 ]; then r_lh=20; fi
+            r_h=$((r_lh + 8))
+
+            set --
+            for r in $repo_list; do
+                set -- "$@" "$r" ""
+            done
+
+            chosen_repo=$(whiptail --menu "Select repository" $r_h 70 $r_lh "$@" 3>&1 1>&2 2>&3)
+            if [ -n "$chosen_repo" ]; then
+                repo_filter="--repo $chosen_repo"
+                echo "Scoped to repository: $chosen_repo"
+            fi
+        fi
+    fi
+
+    # --- Show updatable products ---
+    echo ""
+    echo "Checking for updatable products..."
+    upd_raw=$(LC_ALL=C opsi-package-updater $repo_filter list --updatable-products 2>/dev/null)
+    echo ""
+    echo "Updatable products:"
+    if [ -n "$upd_raw" ]; then
+        echo "$upd_raw" | sed 's/^/  /'
+    fi
+
+    # Parse product ids (indented lines starting with a lowercase id, as in opsi-package-manager -l)
+    upd_list=$(echo "$upd_raw" | awk '/^[[:space:]]+[a-z0-9]/ {print $1}' | tr -d ':' | sort -u)
+
+    if [ -z "$upd_list" ]; then
+        echo ""
+        echo "No updatable products detected by parsing."
+        echo "(You can still run a full update/install/download against the repository.)"
+    fi
+
+    # --- Action menu ---
+    echo ""
+    echo "  [1] Update all installed packages (update)"
+    echo "  [2] Install all updatable packages (install)"
+    echo "  [3] Download all updatable packages (download only)"
+    echo "  [4] Select specific products..."
+    echo "  [0] Back"
+    echo ""
+    read -p "Select: " upd_choice
+
+    case "$upd_choice" in
+        1)
+            echo ""
+            echo "WARNING: This UPDATES all installed packages on the depot from the repository."
+            read -p "Proceed? (y/N): " confirm
+            if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
+                echo "Aborted."
+                return
+            fi
+            LC_ALL=C opsi-package-updater $repo_filter -v update
+            ;;
+        2)
+            echo ""
+            echo "WARNING: This INSTALLS all updatable packages on the depot from the repository."
+            read -p "Proceed? (y/N): " confirm
+            if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
+                echo "Aborted."
+                return
+            fi
+            LC_ALL=C opsi-package-updater $repo_filter -v install
+            ;;
+        3)
+            echo ""
+            echo "Downloading all updatable packages (no install)..."
+            LC_ALL=C opsi-package-updater $repo_filter -v download
+            ;;
+        4)
+            if [ -z "$upd_list" ]; then
+                echo "No products available to select."
+                return
+            fi
+            if ! command -v whiptail > /dev/null 2>&1; then
+                echo "ERROR: whiptail not found."
+                return
+            fi
+
+            p_count=$(echo "$upd_list" | wc -l)
+            p_lh=$p_count
+            if [ "$p_lh" -gt 20 ]; then p_lh=20; fi
+            p_h=$((p_lh + 8))
+
+            set --
+            for p in $upd_list; do
+                set -- "$@" "$p" "" OFF
+            done
+
+            selected_prods=$(whiptail --checklist "Select products (SPACE=select, ENTER=confirm)" $p_h 70 $p_lh "$@" 3>&1 1>&2 2>&3)
+            if [ $? -ne 0 ] || [ -z "$selected_prods" ]; then
+                echo "Nothing selected."
+                return
+            fi
+            selected_prods=$(echo "$selected_prods" | tr -d '"')
+
+            echo ""
+            echo "Selected products:"
+            for p in $selected_prods; do
+                echo "  $p"
+            done
+
+            echo ""
+            echo "  [1] Download only"
+            echo "  [2] Download and install"
+            echo ""
+            read -p "Action: " prod_action
+            case "$prod_action" in
+                1) sub="download" ;;
+                2) sub="install" ;;
+                *) echo "Aborted."; return ;;
+            esac
+
+            if [ "$sub" = "install" ]; then
+                echo ""
+                echo "WARNING: This will INSTALL the selected packages onto the OPSI depot."
+                read -p "Proceed? (y/N): " confirm
+                if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
+                    echo "Aborted."
+                    return
+                fi
+            fi
+
+            LC_ALL=C opsi-package-updater $repo_filter -v $sub $selected_prods
+            ;;
+        0)
+            return
+            ;;
+        *)
+            echo "Invalid choice."
+            return
+            ;;
+    esac
+
+    echo ""
+    echo "Done."
+}
+
 # Main
 banner
 
@@ -1049,6 +1222,7 @@ while true; do
     echo "  [5] Wake-on-LAN"
     echo "  [6] List packages"
     echo "  [7] Fehleranalyse"
+    echo "  [8] Update from repository"
     echo "  [0] Exit"
     echo ""
     read -p "Select: " choice
@@ -1061,6 +1235,7 @@ while true; do
         5) do_wol ;;
         6) do_list ;;
         7) do_diag ;;
+        8) do_update ;;
         0) echo "Bye."; exit 0 ;;
         *) echo "Invalid choice." ;;
     esac
