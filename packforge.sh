@@ -1087,11 +1087,16 @@ fetch_products() {
     [ -z "$fp_prods" ] && return
     nl=$'\n'
 
-    fp_action=$(whiptail --title "Aktion" --menu "Ausgewaehlt:${nl}${fp_prods}" 16 72 2 \
-        "install" "Herunterladen UND ins Depot installieren" \
-        "download" "Nur herunterladen" \
+    fp_choice=$(whiptail --title "Was tun?" --menu "Ausgewaehlt:${nl}${nl}${fp_prods}" 16 72 2 \
+        "1" "Herunterladen UND installieren" \
+        "2" "Nur herunterladen" \
         3>&1 1>&2 2>&3)
     [ $? -ne 0 ] && return
+    case "$fp_choice" in
+        1) fp_action="install" ;;
+        2) fp_action="download" ;;
+        *) return ;;
+    esac
 
     if [ "$fp_action" = "install" ]; then
         whiptail --yesno "Diese Pakete ins Depot INSTALLIEREN?${nl}${nl}${fp_prods}" 16 72 || return
@@ -1106,6 +1111,29 @@ load_updatable() {
     UPD_LIST=$(echo "$SPIN_OUT" | awk -F: '/\(updatable from:/ {id=$1; gsub(/[[:space:]]/,"",id); print id}' | sort -u)
 }
 
+# Scan the depot repository for incomplete/corrupt .opsi files and offer to delete them.
+# A valid .opsi tar contains an "OPSI" metadata member; if it's missing the file is broken.
+check_broken_packages() {
+    [ -d /var/lib/opsi/repository ] || return
+    run_spin "Pruefe Repository auf beschaedigte Pakete..." bash -c '
+        for f in /var/lib/opsi/repository/*.opsi; do
+            [ -e "$f" ] || continue
+            tar -tf "$f" 2>/dev/null | grep -qiE "(^|/)OPSI" || echo "$f"
+        done'
+    cb_broken=$SPIN_OUT
+    [ -z "$cb_broken" ] && return
+
+    nl=$'\n'
+    cb_names=$(echo "$cb_broken" | sed 's#.*/##; s/^/  /')
+    if whiptail --title "Beschaedigte Pakete gefunden" \
+        --yesno "Diese .opsi-Dateien sind unvollstaendig oder defekt (z.B. abgebrochener Download):${nl}${nl}${cb_names}${nl}${nl}Jetzt loeschen? (werden bei Bedarf automatisch neu geladen)" 20 78; then
+        echo "$cb_broken" | while IFS= read -r bf; do
+            [ -n "$bf" ] && rm -f "$bf"
+        done
+        whiptail --msgbox "Beschaedigte Pakete geloescht.${nl}Hole sie bei Bedarf neu ueber das Menue." 9 60
+    fi
+}
+
 do_update() {
     if ! command -v opsi-package-updater > /dev/null 2>&1; then
         echo "ERROR: opsi-package-updater not found. Is this the OPSI depot server?"
@@ -1115,6 +1143,8 @@ do_update() {
         echo "ERROR: whiptail not found."
         return
     fi
+
+    check_broken_packages
 
     while true; do
         choice=$(whiptail --title "Update aus Repository" \
