@@ -1081,20 +1081,20 @@ run_spin() {
     rm -f "$tmpf"
 }
 
-# Draw a progress bar in place. Args: done total width message
+# Draw a progress bar in place. Args: done total width message spinner-char
 render_bar() {
-    rb_d=$1; rb_t=$2; rb_w=$3; rb_m=$4
+    rb_d=$1; rb_t=$2; rb_w=$3; rb_m=$4; rb_s=$5
     [ "$rb_t" -le 0 ] && rb_t=1
     [ "$rb_d" -gt "$rb_t" ] && rb_d=$rb_t
     rb_fill=$(( rb_d * rb_w / rb_t ))
     rb_pct=$(( rb_d * 100 / rb_t ))
     rb_bar=$(printf '%*s' "$rb_fill" '' | tr ' ' '#')
     rb_sp=$(printf '%*s' "$(( rb_w - rb_fill ))" '')
-    printf '\r  %s [%s%s] %3d%% (%d/%d)' "$rb_m" "$rb_bar" "$rb_sp" "$rb_pct" "$rb_d" "$rb_t"
+    printf '\r  [%s] %s [%s%s] %3d%%' "$rb_s" "$rb_m" "$rb_bar" "$rb_sp" "$rb_pct"
 }
 
-# Run a command showing a package-count progress bar. Args: <total> <marker regex> <message> <cmd...>
-# The bar advances each time a line matching <marker> appears in the output.
+# Run a command showing a progress bar (driven by <marker> count) plus a spinner so
+# it never looks frozen. Args: <total steps> <marker regex> <message> <cmd...>
 run_progress() {
     rp_total=$1; shift
     rp_marker=$1; shift
@@ -1102,13 +1102,16 @@ run_progress() {
     tmpf=$(mktemp)
     "$@" > "$tmpf" 2>&1 &
     rp_pid=$!
+    rp_chars='|/-\'
+    rp_i=0
     while kill -0 "$rp_pid" 2>/dev/null; do
+        rp_i=$(( (rp_i + 1) % 4 ))
         rp_done=$(grep -ciE "$rp_marker" "$tmpf" 2>/dev/null)
-        render_bar "$rp_done" "$rp_total" 30 "$rp_msg"
-        sleep 0.3
+        render_bar "$rp_done" "$rp_total" 30 "$rp_msg" "${rp_chars:$rp_i:1}"
+        sleep 0.2
     done
     wait "$rp_pid"
-    render_bar "$rp_total" "$rp_total" 30 "$rp_msg"
+    render_bar "$rp_total" "$rp_total" 30 "$rp_msg" "*"
     printf '\n'
     SPIN_OUT=$(sed $'s/\x1b\\[[0-9;]*[A-Za-z]//g' "$tmpf")
     rm -f "$tmpf"
@@ -1121,11 +1124,20 @@ run_opsi() {
     shift
     ro_msg=$1
     shift
+    # Count download completions ("Setting rights on directory" appears once per
+    # downloaded package) and, for installs, the install completions too.
     case "$1" in
-        download) ro_marker='successfully downloaded' ;;
-        *)        ro_marker='successfully installed' ;;
+        download)
+            ro_marker='Setting rights on directory'
+            ro_steps=$ro_total
+            ;;
+        *)
+            ro_marker='Setting rights on directory|successfully installed'
+            ro_steps=$(( ro_total * 2 ))
+            ;;
     esac
-    run_progress "$ro_total" "$ro_marker" "$ro_msg" env LC_ALL=C opsi-package-updater -v "$@"
+    [ "$ro_steps" -le 0 ] && ro_steps=1
+    run_progress "$ro_steps" "$ro_marker" "$ro_msg" env LC_ALL=C opsi-package-updater -v "$@"
     ro_out=$SPIN_OUT
 
     ro_inst=$(echo "$ro_out" | sed -nE "s#.*Package '[^']*/([^/']+)\.opsi' successfully installed.*#  OK   \1#p")
@@ -1140,7 +1152,7 @@ run_opsi() {
     [ -z "$ro_inst$ro_dl$ro_err" ] && echo "No changes - nothing to do."
 
     # Offer to delete packages opsi reported as corrupt (broken metadata)
-    ro_bad=$(echo "$ro_out" | sed -nE "s#.*get metadata from package '([^']+)'.*#\1#p" | sort -u)
+    ro_bad=$(echo "$ro_out" | sed -nE "s#.*get metadata from package '(/[^']+)'.*#\1#p" | sort -u)
     if [ -n "$ro_bad" ]; then
         echo ""
         echo "Corrupt package file(s) detected:"
