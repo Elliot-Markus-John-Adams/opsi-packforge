@@ -1081,12 +1081,51 @@ run_spin() {
     rm -f "$tmpf"
 }
 
-# Run an opsi-package-updater action with a spinner, then show a clean summary.
-# Args: <spinner message> <action> [productid...]   (operates on all repos)
+# Draw a progress bar in place. Args: done total width message
+render_bar() {
+    rb_d=$1; rb_t=$2; rb_w=$3; rb_m=$4
+    [ "$rb_t" -le 0 ] && rb_t=1
+    [ "$rb_d" -gt "$rb_t" ] && rb_d=$rb_t
+    rb_fill=$(( rb_d * rb_w / rb_t ))
+    rb_pct=$(( rb_d * 100 / rb_t ))
+    rb_bar=$(printf '%*s' "$rb_fill" '' | tr ' ' '#')
+    rb_sp=$(printf '%*s' "$(( rb_w - rb_fill ))" '')
+    printf '\r  %s [%s%s] %3d%% (%d/%d)' "$rb_m" "$rb_bar" "$rb_sp" "$rb_pct" "$rb_d" "$rb_t"
+}
+
+# Run a command showing a package-count progress bar. Args: <total> <marker regex> <message> <cmd...>
+# The bar advances each time a line matching <marker> appears in the output.
+run_progress() {
+    rp_total=$1; shift
+    rp_marker=$1; shift
+    rp_msg=$1; shift
+    tmpf=$(mktemp)
+    "$@" > "$tmpf" 2>&1 &
+    rp_pid=$!
+    while kill -0 "$rp_pid" 2>/dev/null; do
+        rp_done=$(grep -ciE "$rp_marker" "$tmpf" 2>/dev/null)
+        render_bar "$rp_done" "$rp_total" 30 "$rp_msg"
+        sleep 0.3
+    done
+    wait "$rp_pid"
+    render_bar "$rp_total" "$rp_total" 30 "$rp_msg"
+    printf '\n'
+    SPIN_OUT=$(sed $'s/\x1b\\[[0-9;]*[A-Za-z]//g' "$tmpf")
+    rm -f "$tmpf"
+}
+
+# Run an opsi-package-updater action with a progress bar, then show a clean summary.
+# Args: <total packages> <message> <action> [productid...]   (operates on all repos)
 run_opsi() {
+    ro_total=$1
+    shift
     ro_msg=$1
     shift
-    run_spin "$ro_msg" env LC_ALL=C opsi-package-updater -v "$@"
+    case "$1" in
+        download) ro_marker='successfully downloaded' ;;
+        *)        ro_marker='successfully installed' ;;
+    esac
+    run_progress "$ro_total" "$ro_marker" "$ro_msg" env LC_ALL=C opsi-package-updater -v "$@"
     ro_out=$SPIN_OUT
 
     ro_inst=$(echo "$ro_out" | sed -nE "s#.*Package '[^']*/([^/']+)\.opsi' successfully installed.*#  OK   \1#p")
@@ -1128,7 +1167,8 @@ fetch_products() {
         fi
     fi
 
-    run_opsi "Working..." "$fp_action" $fp_prods
+    fp_count=$(echo $fp_prods | wc -w)
+    run_opsi "$fp_count" "Working..." "$fp_action" $fp_prods
 }
 
 # Get updatable product ids (one per line) into $UPD_LIST
@@ -1199,7 +1239,7 @@ do_update() {
                 echo ""
                 read -p "Install all now? (y/N): " confirm
                 if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then
-                    run_opsi "Updating..." update
+                    run_opsi "$cnt" "Updating..." update
                 fi
                 ;;
             2)
