@@ -1137,7 +1137,9 @@ run_opsi() {
             ;;
     esac
     [ "$ro_steps" -le 0 ] && ro_steps=1
-    run_progress "$ro_steps" "$ro_marker" "$ro_msg" env LC_ALL=C opsi-package-updater -v "$@"
+    # --no-zsync forces full downloads; zsync delta-patching is a common cause of
+    # repeatedly corrupt .opsi files ("No metadata archive found").
+    run_progress "$ro_steps" "$ro_marker" "$ro_msg" env LC_ALL=C opsi-package-updater -v --no-zsync "$@"
     ro_out=$SPIN_OUT
 
     ro_inst=$(echo "$ro_out" | sed -nE "s#.*Package '[^']*/([^/']+)\.opsi' successfully installed.*#  OK   \1#p")
