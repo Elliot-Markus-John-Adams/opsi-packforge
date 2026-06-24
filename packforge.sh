@@ -1066,32 +1066,32 @@ run_opsi() {
     shift
     run_spin "$ro_msg" env LC_ALL=C opsi-package-updater -v "$@"
     ro_out=$SPIN_OUT
-    nl=$'\n'
 
     ro_inst=$(echo "$ro_out" | sed -nE "s#.*Package '[^']*/([^/']+)\.opsi' successfully installed.*#  OK   \1#p")
     ro_dl=$(echo "$ro_out" | grep -iE 'successfully downloaded' | sed -E "s#.*/([^/' ]+\.opsi).*#  DL   \1#")
     ro_err=$(echo "$ro_out" | grep -iE 'error|failed|cannot|critical|traceback' | grep -viE 'no error|0 error' | sed 's/^/  /')
 
-    ro_sum=""
-    [ -n "$ro_inst" ] && ro_sum="${ro_sum}Installed / updated:${nl}${ro_inst}${nl}${nl}"
-    [ -n "$ro_dl" ] && ro_sum="${ro_sum}Downloaded:${nl}${ro_dl}${nl}${nl}"
-    [ -n "$ro_err" ] && ro_sum="${ro_sum}ERRORS / warnings:${nl}${ro_err}${nl}${nl}"
-    [ -z "$ro_sum" ] && ro_sum="No changes - nothing to do.${nl}"
-
-    whiptail --title "Result" --scrolltext --msgbox "$ro_sum" 24 86
+    echo ""
+    echo "--- Result ---"
+    [ -n "$ro_inst" ] && { echo "Installed / updated:"; echo "$ro_inst"; }
+    [ -n "$ro_dl" ] && { echo "Downloaded:"; echo "$ro_dl"; }
+    [ -n "$ro_err" ] && { echo "Errors / warnings:"; echo "$ro_err"; }
+    [ -z "$ro_inst$ro_dl$ro_err" ] && echo "No changes - nothing to do."
+    echo ""
+    read -p "Press ENTER to continue..." _
 }
 
 # Ask install vs download for the given product ids, confirm, then run with summary.
 fetch_products() {
     fp_prods="$*"
     [ -z "$fp_prods" ] && return
-    nl=$'\n'
 
-    fp_choice=$(whiptail --title "What to do?" --menu "Selected:${nl}${nl}${fp_prods}" 16 72 2 \
-        "1" "Download AND install" \
-        "2" "Download only" \
-        3>&1 1>&2 2>&3)
-    [ $? -ne 0 ] && return
+    echo ""
+    echo "Selected: $fp_prods"
+    echo "  [1] Download AND install"
+    echo "  [2] Download only"
+    echo "  [0] Cancel"
+    read -p "Select: " fp_choice
     case "$fp_choice" in
         1) fp_action="install" ;;
         2) fp_action="download" ;;
@@ -1099,7 +1099,11 @@ fetch_products() {
     esac
 
     if [ "$fp_action" = "install" ]; then
-        whiptail --yesno "INSTALL these packages onto the depot?${nl}${nl}${fp_prods}" 16 72 || return
+        read -p "Install these packages onto the depot? (y/N): " confirm
+        if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
+            echo "Aborted."
+            return
+        fi
     fi
 
     run_opsi "Working..." "$fp_action" $fp_prods
@@ -1123,14 +1127,16 @@ check_broken_packages() {
     cb_broken=$SPIN_OUT
     [ -z "$cb_broken" ] && return
 
-    nl=$'\n'
-    cb_names=$(echo "$cb_broken" | sed 's#.*/##; s/^/  /')
-    if whiptail --title "Broken packages found" \
-        --yesno "These .opsi files are incomplete or corrupt (e.g. an aborted download):${nl}${nl}${cb_names}${nl}${nl}Delete them now? (they will be re-downloaded when needed)" 20 78; then
+    echo ""
+    echo "Broken / incomplete .opsi files found (e.g. aborted download):"
+    echo "$cb_broken" | sed 's#.*/##; s/^/  /'
+    echo ""
+    read -p "Delete them? (re-downloaded when needed) (y/N): " confirm
+    if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then
         echo "$cb_broken" | while IFS= read -r bf; do
             [ -n "$bf" ] && rm -f "$bf"
         done
-        whiptail --msgbox "Broken packages deleted.${nl}They will be fetched again when needed via the menu." 9 64
+        echo "Deleted."
     fi
 }
 
@@ -1147,35 +1153,37 @@ do_update() {
     check_broken_packages
 
     while true; do
-        choice=$(whiptail --title "Update from repository" \
-            --menu "What do you want to do?" 13 68 4 \
-            "1" "Update installed packages" \
-            "2" "Pick from available updates" \
-            "3" "Get a new package (search list)" \
-            "0" "Back" \
-            3>&1 1>&2 2>&3)
-        [ $? -ne 0 ] && return
+        echo ""
+        echo "--- Update from Repository ---"
+        echo ""
+        echo "  [1] Update installed packages"
+        echo "  [2] Pick from available updates"
+        echo "  [3] Get a new package (search list)"
+        echo "  [0] Back"
+        echo ""
+        read -p "Select: " choice
 
         case "$choice" in
             1)
                 load_updatable
                 if [ -z "$UPD_LIST" ]; then
-                    whiptail --msgbox "Everything up to date - no updates available." 8 55
+                    echo "Everything up to date - no updates available."
                     continue
                 fi
                 cnt=$(echo "$UPD_LIST" | wc -l)
-                nl=$'\n'
-                box_h=$(( cnt + 10 ))
-                [ "$box_h" -gt 24 ] && box_h=24
-                if whiptail --title "Updates available" \
-                    --yesno "${cnt} update(s):${nl}${nl}$(echo "$UPD_LIST" | sed 's/^/  /')${nl}${nl}Install all now?" $box_h 70; then
+                echo ""
+                echo "$cnt update(s) available:"
+                echo "$UPD_LIST" | sed 's/^/  /'
+                echo ""
+                read -p "Install all now? (y/N): " confirm
+                if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then
                     run_opsi "Updating..." update
                 fi
                 ;;
             2)
                 load_updatable
                 if [ -z "$UPD_LIST" ]; then
-                    whiptail --msgbox "Everything up to date - no updates available." 8 55
+                    echo "Everything up to date - no updates available."
                     continue
                 fi
                 cnt=$(echo "$UPD_LIST" | wc -l)
@@ -1192,13 +1200,12 @@ do_update() {
                 fetch_products $sel
                 ;;
             3)
-                fltr=$(whiptail --title "Available packages" --inputbox "Filter by name (empty = show all):" 9 62 "" 3>&1 1>&2 2>&3)
-                [ $? -ne 0 ] && continue
+                read -p "Filter by name (empty = all): " fltr
                 run_spin "Loading package list..." env LC_ALL=C opsi-package-updater list --products
                 all_list=$(echo "$SPIN_OUT" | awk '/\(Version/ {print $1}' | sort -u)
                 [ -n "$fltr" ] && all_list=$(echo "$all_list" | grep -i "$fltr")
                 if [ -z "$all_list" ]; then
-                    whiptail --msgbox "Nothing found." 8 50
+                    echo "Nothing found."
                     continue
                 fi
                 acnt=$(echo "$all_list" | wc -l)
@@ -1216,6 +1223,9 @@ do_update() {
                 ;;
             0)
                 return
+                ;;
+            *)
+                echo "Invalid choice."
                 ;;
         esac
     done
