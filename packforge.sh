@@ -676,6 +676,7 @@ do_diag() {
         echo "  [4] Show client logs"
         echo "  [5] Check OPSI services"
         echo "  [6] Disk space"
+        echo "  [7] OPSI health check"
         echo "  [0] Back"
         echo ""
         read -p "Select: " diag_choice
@@ -687,6 +688,7 @@ do_diag() {
             4) diag_logs ;;
             5) diag_services ;;
             6) diag_disk ;;
+            7) diag_health ;;
             0) return ;;
             *) echo "Invalid choice." ;;
         esac
@@ -717,7 +719,8 @@ diag_failed() {
     echo "$failed" | awk -F'"' '
         /"clientId"/ { client=$4 }
         /"productId"/ { product=$4 }
-        /"lastAction"/ { action=$4; printf "  %-35s %-30s %s\n", client, product, action }
+        /"lastAction"/ { action=$4 }
+        /}/ { if (client != "") { printf "  %-35s %-30s %s\n", client, product, action; client=""; product=""; action="" } }
     '
 }
 
@@ -745,7 +748,8 @@ diag_reset_failed() {
     echo "  ----------------------------------- ------------------------------"
     pairs=$(echo "$failed" | awk -F'"' '
         /"clientId"/ { client=$4 }
-        /"productId"/ { product=$4; print client " " product }
+        /"productId"/ { product=$4 }
+        /}/ { if (client != "" && product != "") { print client " " product; client=""; product="" } }
     ')
     echo "$pairs" | while read -r client_id product_id; do
         printf "  %-35s %s\n" "$client_id" "$product_id"
@@ -768,7 +772,8 @@ diag_reset_failed() {
     echo "Setting all to '$action'..."
 
     echo "$pairs" | while read -r client_id product_id; do
-        if LC_ALL=C opsi-admin -d method setProductActionRequest "$product_id" "$client_id" "$action" 2>/dev/null; then
+        [ -z "$client_id" ] && continue
+        if LC_ALL=C opsi-admin -d method setProductActionRequest "$product_id" "$client_id" "$action" </dev/null 2>/dev/null; then
             echo "  OK: $product_id -> $client_id ($action)"
         else
             echo "  FAILED: $product_id -> $client_id"
@@ -935,6 +940,23 @@ diag_disk() {
     else
         echo "  Repository not present"
     fi
+}
+
+diag_health() {
+    echo ""
+    echo "--- OPSI Health Check ---"
+    echo ""
+
+    if ! command -v opsiconfd > /dev/null 2>&1; then
+        echo "ERROR: opsiconfd not found. Is this the OPSI server?"
+        return
+    fi
+
+    echo "Running 'opsiconfd health-check' (this can take a moment)..."
+    echo ""
+    opsiconfd health-check
+    echo ""
+    read -p "Press ENTER to continue..." _
 }
 
 do_build() {
