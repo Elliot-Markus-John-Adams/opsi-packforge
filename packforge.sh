@@ -1138,6 +1138,22 @@ run_opsi() {
     [ -n "$ro_dl" ] && { echo "Downloaded:"; echo "$ro_dl"; }
     [ -n "$ro_err" ] && { echo "Errors / warnings:"; echo "$ro_err"; }
     [ -z "$ro_inst$ro_dl$ro_err" ] && echo "No changes - nothing to do."
+
+    # Offer to delete packages opsi reported as corrupt (broken metadata)
+    ro_bad=$(echo "$ro_out" | sed -nE "s#.*get metadata from package '([^']+)'.*#\1#p" | sort -u)
+    if [ -n "$ro_bad" ]; then
+        echo ""
+        echo "Corrupt package file(s) detected:"
+        echo "$ro_bad" | sed 's#.*/##; s/^/  /'
+        read -p "Delete them so a fresh copy is fetched next run? (y/N): " confirm
+        if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then
+            echo "$ro_bad" | while IFS= read -r bf; do
+                [ -n "$bf" ] && rm -f "$bf"
+            done
+            echo "Deleted. Run the update again to fetch a clean copy."
+        fi
+    fi
+
     echo ""
     read -p "Press ENTER to continue..." _
 }
@@ -1184,7 +1200,11 @@ check_broken_packages() {
     run_spin "Checking repository for broken packages..." bash -c '
         for f in /var/lib/opsi/repository/*.opsi; do
             [ -e "$f" ] || continue
-            tar -tf "$f" 2>/dev/null | grep -qiE "(^|/)OPSI" || echo "$f"
+            if ! tar -tf "$f" > /dev/null 2>&1; then
+                echo "$f"                                  # truncated / corrupt archive
+            elif ! tar -tf "$f" 2>/dev/null | grep -qiE "(^|/)OPSI"; then
+                echo "$f"                                  # no OPSI metadata member
+            fi
         done'
     cb_broken=$SPIN_OUT
     [ -z "$cb_broken" ] && return
