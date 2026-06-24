@@ -952,9 +952,44 @@ diag_health() {
         return
     fi
 
-    echo "Running 'opsiconfd health-check' (this can take a moment)..."
-    echo ""
-    opsiconfd health-check
+    # 'opsiconfd health-check' only exists in opsi >= 4.2. Running it on 4.1 would
+    # try to start a second daemon, so detect the version first (opsiconfd -v is safe).
+    ver=$(opsiconfd -v 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' | head -1)
+    major=$(echo "$ver" | cut -d. -f1)
+    minor=$(echo "$ver" | cut -d. -f2)
+
+    if [ -n "$major" ] && [ -n "$minor" ] && { [ "$major" -gt 4 ] || { [ "$major" -eq 4 ] && [ "$minor" -ge 2 ]; }; }; then
+        echo "Running 'opsiconfd health-check' (this can take a moment)..."
+        echo ""
+        opsiconfd health-check
+    else
+        echo "'opsiconfd health-check' needs opsi 4.2+ (this server: ${ver:-unknown})."
+        echo "Running basic checks instead:"
+        echo ""
+        echo "Services:"
+        for svc in opsiconfd opsipxeconfd; do
+            status=$(systemctl is-active "$svc" 2>/dev/null)
+            echo "  $svc: ${status:-unknown}"
+        done
+        echo ""
+        echo -n "Backend connection: "
+        if LC_ALL=C opsi-admin -d method backend_info > /dev/null 2>&1; then
+            echo "OK"
+        else
+            echo "ERROR"
+        fi
+        echo ""
+        echo "Packages needing opsi 4.2+ (zstd, not installable here):"
+        zfound=0
+        for f in /var/lib/opsi/repository/*.opsi; do
+            [ -e "$f" ] || continue
+            if tar -tf "$f" 2>/dev/null | grep -q '\.zstd$'; then
+                echo "  $(basename "$f")"
+                zfound=1
+            fi
+        done
+        [ "$zfound" -eq 0 ] && echo "  none"
+    fi
     echo ""
     read -p "Press ENTER to continue..." _
 }
