@@ -1153,18 +1153,42 @@ run_opsi() {
     [ -n "$ro_err" ] && { echo "Errors / warnings:"; echo "$ro_err"; }
     [ -z "$ro_inst$ro_dl$ro_err" ] && echo "No changes - nothing to do."
 
-    # Offer to delete packages opsi reported as corrupt (broken metadata)
+    # Handle packages opsi reported as having broken metadata. Distinguish:
+    #  - zstd-compressed packages -> too new for this opsi version (re-download won't help)
+    #  - genuinely truncated/corrupt -> offer to delete so they re-download
     ro_bad=$(echo "$ro_out" | sed -nE "s#.*get metadata from package '(/[^']+)'.*#\1#p" | sort -u)
     if [ -n "$ro_bad" ]; then
-        echo ""
-        echo "Corrupt package file(s) detected:"
-        echo "$ro_bad" | sed 's#.*/##; s/^/  /'
-        read -p "Delete them so a fresh copy is fetched next run? (y/N): " confirm
-        if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then
-            echo "$ro_bad" | while IFS= read -r bf; do
-                [ -n "$bf" ] && rm -f "$bf"
-            done
-            echo "Deleted. Run the update again to fetch a clean copy."
+        zstd_bad=""
+        trunc_bad=""
+        while IFS= read -r bf; do
+            [ -z "$bf" ] && continue
+            if tar -tf "$bf" 2>/dev/null | grep -q '\.zstd$'; then
+                zstd_bad="${zstd_bad}${bf}
+"
+            else
+                trunc_bad="${trunc_bad}${bf}
+"
+            fi
+        done <<< "$ro_bad"
+
+        if [ -n "$zstd_bad" ]; then
+            echo ""
+            echo "Incompatible package(s) - compressed with zstd, which this opsi"
+            echo "version (4.1) cannot read. Re-downloading will NOT help; the opsi"
+            echo "server must be updated to 4.2+ to install these:"
+            echo "$zstd_bad" | sed '/^$/d; s#.*/##; s/^/  /'
+        fi
+        if [ -n "$trunc_bad" ]; then
+            echo ""
+            echo "Corrupt/truncated package file(s):"
+            echo "$trunc_bad" | sed '/^$/d; s#.*/##; s/^/  /'
+            read -p "Delete them so a fresh copy is fetched next run? (y/N): " confirm
+            if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then
+                echo "$trunc_bad" | while IFS= read -r bf; do
+                    [ -n "$bf" ] && rm -f "$bf"
+                done
+                echo "Deleted. Run the update again to fetch a clean copy."
+            fi
         fi
     fi
 
