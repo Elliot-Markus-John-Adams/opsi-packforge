@@ -1059,179 +1059,130 @@ run_spin() {
     rm -f "$tmpf"
 }
 
-# Ask download-only vs install for given product ids, then run it. Args: <repo_filter> <productid...>
-fetch_products() {
-    fp_filter=$1
+# Run an opsi-package-updater action with a spinner, then show a clean summary.
+# Args: <spinner message> <action> [productid...]   (operates on all repos)
+run_opsi() {
+    ro_msg=$1
     shift
+    run_spin "$ro_msg" env LC_ALL=C opsi-package-updater -v "$@"
+    ro_out=$SPIN_OUT
+    nl=$'\n'
+
+    ro_inst=$(echo "$ro_out" | sed -nE "s#.*Package '[^']*/([^/']+)\.opsi' successfully installed.*#  OK   \1#p")
+    ro_dl=$(echo "$ro_out" | grep -iE 'successfully downloaded' | sed -E "s#.*/([^/' ]+\.opsi).*#  DL   \1#")
+    ro_err=$(echo "$ro_out" | grep -iE 'error|failed|cannot|critical|traceback' | grep -viE 'no error|0 error' | sed 's/^/  /')
+
+    ro_sum=""
+    [ -n "$ro_inst" ] && ro_sum="${ro_sum}Installiert / aktualisiert:${nl}${ro_inst}${nl}${nl}"
+    [ -n "$ro_dl" ] && ro_sum="${ro_sum}Heruntergeladen:${nl}${ro_dl}${nl}${nl}"
+    [ -n "$ro_err" ] && ro_sum="${ro_sum}FEHLER / Warnungen:${nl}${ro_err}${nl}${nl}"
+    [ -z "$ro_sum" ] && ro_sum="Keine Aenderungen - nichts zu tun.${nl}"
+
+    whiptail --title "Ergebnis" --scrolltext --msgbox "$ro_sum" 24 86
+}
+
+# Ask install vs download for the given product ids, confirm, then run with summary.
+fetch_products() {
     fp_prods="$*"
     [ -z "$fp_prods" ] && return
+    nl=$'\n'
 
-    fp_action=$(whiptail --title "Fetch products" --menu "Selected:\n$fp_prods" 16 72 2 \
-        "download" "Download only (no install)" \
-        "install" "Download AND install onto depot" \
+    fp_action=$(whiptail --title "Aktion" --menu "Ausgewaehlt:${nl}${fp_prods}" 16 72 2 \
+        "install" "Herunterladen UND ins Depot installieren" \
+        "download" "Nur herunterladen" \
         3>&1 1>&2 2>&3)
     [ $? -ne 0 ] && return
 
     if [ "$fp_action" = "install" ]; then
-        whiptail --yesno "INSTALL these packages onto the OPSI depot?\n\n$fp_prods" 16 72 || return
+        whiptail --yesno "Diese Pakete ins Depot INSTALLIEREN?${nl}${nl}${fp_prods}" 16 72 || return
     fi
 
-    echo ""
-    echo "Running: opsi-package-updater $fp_filter $fp_action $fp_prods"
-    LC_ALL=C opsi-package-updater $fp_filter -v $fp_action $fp_prods
-    echo ""
-    read -p "Press ENTER to continue..." _
+    run_opsi "Arbeite..." "$fp_action" $fp_prods
+}
+
+# Get updatable product ids (one per line) into $UPD_LIST
+load_updatable() {
+    run_spin "Pruefe auf Updates..." env LC_ALL=C opsi-package-updater list --updatable-products
+    UPD_LIST=$(echo "$SPIN_OUT" | awk -F: '/\(updatable from:/ {id=$1; gsub(/[[:space:]]/,"",id); print id}' | sort -u)
 }
 
 do_update() {
-    echo ""
-    echo "--- Update Packages from Repository ---"
-    echo ""
-
     if ! command -v opsi-package-updater > /dev/null 2>&1; then
         echo "ERROR: opsi-package-updater not found. Is this the OPSI depot server?"
         return
     fi
-
-    # --- Load configured repositories ---
-    run_spin "Loading repositories..." env LC_ALL=C opsi-package-updater list --active-repos
-    repo_raw=$SPIN_OUT
-
-    # --- Choose repository via whiptail menu (name + URL), or "ALL" ---
-    repo_filter=""
-    if command -v whiptail > /dev/null 2>&1; then
-        set -- "ALL" "use all repositories"
-        while IFS= read -r line; do
-            [ -z "$line" ] && continue
-            r_name=${line%%:*}
-            r_name=$(echo "$r_name" | tr -d '[:space:]')
-            r_url=${line#*: }
-            r_url=$(echo "$r_url" | sed 's/[[:space:]]*$//')
-            set -- "$@" "$r_name" "$r_url"
-        done <<< "$(echo "$repo_raw" | grep -E ':[[:space:]]*http')"
-
-        if [ "$#" -gt 2 ]; then
-            r_count=$(( $# / 2 ))
-            r_lh=$r_count
-            if [ "$r_lh" -gt 20 ]; then r_lh=20; fi
-            r_h=$((r_lh + 8))
-
-            chosen_repo=$(whiptail --menu "Select repository to work with" $r_h 78 $r_lh "$@" 3>&1 1>&2 2>&3)
-            if [ $? -ne 0 ]; then
-                echo "Aborted."
-                return
-            fi
-            if [ -n "$chosen_repo" ] && [ "$chosen_repo" != "ALL" ]; then
-                repo_filter="--repo $chosen_repo"
-            fi
-        else
-            echo "No active repositories found."
-            echo "$repo_raw" | sed 's/^/  /'
-        fi
-    else
-        echo "Configured repositories:"
-        echo "$repo_raw" | sed 's/^/  /'
-    fi
-
-    # --- Load updatable products ---
-    run_spin "Checking for updatable products..." env LC_ALL=C opsi-package-updater $repo_filter list --updatable-products
-    upd_raw=$SPIN_OUT
-
-    # Parse product ids from lines like "7zip: 26.01-1 in <repo> (updatable from: 26.00-1)"
-    upd_list=$(echo "$upd_raw" | awk -F: '/\(updatable from:/ {id=$1; gsub(/[[:space:]]/,"",id); print id}' | sort -u)
-    upd_count=0
-    [ -n "$upd_list" ] && upd_count=$(echo "$upd_list" | wc -l)
-
     if ! command -v whiptail > /dev/null 2>&1; then
         echo "ERROR: whiptail not found."
         return
     fi
 
-    # --- Action menu (whiptail) ---
     while true; do
-        upd_choice=$(whiptail --title "Update from repository" \
-            --menu "$upd_count updatable product(s) found. Choose an action:" 20 78 7 \
-            "L" "List updatable products" \
-            "1" "Update already-installed packages" \
-            "2" "Install ALL repo packages (whole catalog!)" \
-            "3" "Download ALL repo packages (whole catalog)" \
-            "4" "Pick from updatable products..." \
-            "5" "Browse/pick ALL available products (incl. new)..." \
-            "0" "Back" \
+        choice=$(whiptail --title "Update aus Repository" \
+            --menu "Was moechtest du tun?" 13 68 4 \
+            "1" "Installierte Pakete aktualisieren" \
+            "2" "Aus verfuegbaren Updates auswaehlen" \
+            "3" "Neues Paket holen (Liste durchsuchen)" \
+            "0" "Zurueck" \
             3>&1 1>&2 2>&3)
         [ $? -ne 0 ] && return
 
-        case "$upd_choice" in
-            L)
-                if [ -n "$upd_raw" ]; then
-                    whiptail --title "Updatable products" --scrolltext --msgbox "$upd_raw" 24 90
-                else
-                    whiptail --msgbox "No updatable products." 8 50
-                fi
-                ;;
+        case "$choice" in
             1)
-                if whiptail --yesno "UPDATE all already-installed packages from the repository?" 10 70; then
-                    LC_ALL=C opsi-package-updater $repo_filter -v update
-                    echo ""
-                    read -p "Press ENTER to continue..." _
+                load_updatable
+                if [ -z "$UPD_LIST" ]; then
+                    whiptail --msgbox "Alles aktuell - keine Updates verfuegbar." 8 55
+                    continue
+                fi
+                cnt=$(echo "$UPD_LIST" | wc -l)
+                nl=$'\n'
+                box_h=$(( cnt + 10 ))
+                [ "$box_h" -gt 24 ] && box_h=24
+                if whiptail --title "Updates verfuegbar" \
+                    --yesno "${cnt} Update(s):${nl}${nl}$(echo "$UPD_LIST" | sed 's/^/  /')${nl}${nl}Jetzt alle installieren?" $box_h 70; then
+                    run_opsi "Aktualisiere..." update
                 fi
                 ;;
             2)
-                if whiptail --yesno "Install the ENTIRE repo catalog onto the depot?\n\nEvery package not already present - can be many GB and many products.\nFor single products use option 5 instead." 14 72; then
-                    LC_ALL=C opsi-package-updater $repo_filter -v install
-                    echo ""
-                    read -p "Press ENTER to continue..." _
-                fi
-                ;;
-            3)
-                if whiptail --yesno "Download the ENTIRE repo catalog?\n\nEvery package not already present - can be many GB (incl. Windows images). No install.\nFor single products use option 5 instead." 14 72; then
-                    LC_ALL=C opsi-package-updater $repo_filter -v download
-                    echo ""
-                    read -p "Press ENTER to continue..." _
-                fi
-                ;;
-            4)
-                if [ -z "$upd_list" ]; then
-                    whiptail --msgbox "No updatable products to pick from." 8 55
+                load_updatable
+                if [ -z "$UPD_LIST" ]; then
+                    whiptail --msgbox "Alles aktuell - keine Updates verfuegbar." 8 55
                     continue
                 fi
-                p_lh=$upd_count
-                if [ "$p_lh" -gt 20 ]; then p_lh=20; fi
-                p_h=$((p_lh + 8))
+                cnt=$(echo "$UPD_LIST" | wc -l)
+                lh=$cnt
+                [ "$lh" -gt 18 ] && lh=18
                 set --
-                for p in $upd_list; do
+                for p in $UPD_LIST; do
                     set -- "$@" "$p" "" OFF
                 done
-                selected_prods=$(whiptail --checklist "Select updatable products (SPACE=select, ENTER=confirm)" $p_h 70 $p_lh "$@" 3>&1 1>&2 2>&3)
+                sel=$(whiptail --title "Updates auswaehlen" --checklist "Leertaste = waehlen, Enter = OK" $((lh + 8)) 70 $lh "$@" 3>&1 1>&2 2>&3)
                 [ $? -ne 0 ] && continue
-                selected_prods=$(echo "$selected_prods" | tr -d '"')
-                [ -z "$selected_prods" ] && continue
-                fetch_products "$repo_filter" $selected_prods
+                sel=$(echo "$sel" | tr -d '"')
+                [ -z "$sel" ] && continue
+                fetch_products $sel
                 ;;
-            5)
-                run_spin "Loading all available products..." env LC_ALL=C opsi-package-updater $repo_filter list --products
-                all_raw=$SPIN_OUT
-                # Parse product ids from lines like "      7zip (Version 26.01-1)"
-                all_list=$(echo "$all_raw" | awk '/\(Version/ {print $1}' | sort -u)
-
+            3)
+                fltr=$(whiptail --title "Verfuegbare Pakete" --inputbox "Nach Name filtern (leer = alle anzeigen):" 9 62 "" 3>&1 1>&2 2>&3)
+                [ $? -ne 0 ] && continue
+                run_spin "Lade Paketliste..." env LC_ALL=C opsi-package-updater list --products
+                all_list=$(echo "$SPIN_OUT" | awk '/\(Version/ {print $1}' | sort -u)
+                [ -n "$fltr" ] && all_list=$(echo "$all_list" | grep -i "$fltr")
                 if [ -z "$all_list" ]; then
-                    whiptail --title "All products" --scrolltext --msgbox "No products parsed. Raw output:\n\n$all_raw" 24 90
+                    whiptail --msgbox "Nichts gefunden." 8 50
                     continue
                 fi
-
-                a_count=$(echo "$all_list" | wc -l)
-                a_lh=$a_count
-                if [ "$a_lh" -gt 20 ]; then a_lh=20; fi
-                a_h=$((a_lh + 8))
+                acnt=$(echo "$all_list" | wc -l)
+                lh=$acnt
+                [ "$lh" -gt 18 ] && lh=18
                 set --
                 for p in $all_list; do
                     set -- "$@" "$p" "" OFF
                 done
-                selected_prods=$(whiptail --checklist "Select products to fetch ($a_count available)" $a_h 70 $a_lh "$@" 3>&1 1>&2 2>&3)
+                sel=$(whiptail --title "Pakete auswaehlen ($acnt)" --checklist "Leertaste = waehlen, Enter = OK" $((lh + 8)) 72 $lh "$@" 3>&1 1>&2 2>&3)
                 [ $? -ne 0 ] && continue
-                selected_prods=$(echo "$selected_prods" | tr -d '"')
-                [ -z "$selected_prods" ] && continue
-                fetch_products "$repo_filter" $selected_prods
+                sel=$(echo "$sel" | tr -d '"')
+                [ -z "$sel" ] && continue
+                fetch_products $sel
                 ;;
             0)
                 return
