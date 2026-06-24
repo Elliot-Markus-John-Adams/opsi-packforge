@@ -668,15 +668,15 @@ do_wol() {
 do_diag() {
     while true; do
         echo ""
-        echo "--- Fehleranalyse ---"
+        echo "--- Diagnostics ---"
         echo ""
-        echo "  [1] Fehlgeschlagene Aktionen"
-        echo "  [2] Fehlgeschlagene zuruecksetzen"
-        echo "  [3] Client-Status pruefen"
-        echo "  [4] Client-Logs anzeigen"
-        echo "  [5] OPSI-Dienste pruefen"
-        echo "  [6] Festplattenplatz"
-        echo "  [0] Zurueck"
+        echo "  [1] Failed actions"
+        echo "  [2] Reset failed actions"
+        echo "  [3] Check client status"
+        echo "  [4] Show client logs"
+        echo "  [5] Check OPSI services"
+        echo "  [6] Disk space"
+        echo "  [0] Back"
         echo ""
         read -p "Select: " diag_choice
 
@@ -695,7 +695,7 @@ do_diag() {
 
 diag_failed() {
     echo ""
-    echo "--- Fehlgeschlagene Aktionen ---"
+    echo "--- Failed Actions ---"
     echo ""
 
     if ! command -v opsi-admin > /dev/null 2>&1; then
@@ -707,12 +707,12 @@ diag_failed() {
     failed=$(LC_ALL=C opsi-admin -d method productOnClient_getObjects '[]' '{"actionResult":"failed"}' 2>/dev/null)
 
     if [ -z "$failed" ] || [ "$failed" = "[]" ]; then
-        echo "Keine fehlgeschlagenen Aktionen."
+        echo "No failed actions."
         return
     fi
 
     echo ""
-    printf "  %-35s %-30s %s\n" "CLIENT" "PRODUKT" "AKTION"
+    printf "  %-35s %-30s %s\n" "CLIENT" "PRODUCT" "ACTION"
     echo "  ----------------------------------- ------------------------------ ----------"
     echo "$failed" | awk -F'"' '
         /"clientId"/ { client=$4 }
@@ -723,7 +723,7 @@ diag_failed() {
 
 diag_reset_failed() {
     echo ""
-    echo "--- Fehlgeschlagene zuruecksetzen ---"
+    echo "--- Reset Failed Actions ---"
     echo ""
 
     if ! command -v opsi-admin > /dev/null 2>&1; then
@@ -735,13 +735,13 @@ diag_reset_failed() {
     failed=$(LC_ALL=C opsi-admin -d method productOnClient_getObjects '[]' '{"actionResult":"failed"}' 2>/dev/null)
 
     if [ -z "$failed" ] || [ "$failed" = "[]" ]; then
-        echo "Keine fehlgeschlagenen Aktionen."
+        echo "No failed actions."
         return
     fi
 
     # Show what will be reset and collect pairs
     echo ""
-    printf "  %-35s %s\n" "CLIENT" "PRODUKT"
+    printf "  %-35s %s\n" "CLIENT" "PRODUCT"
     echo "  ----------------------------------- ------------------------------"
     pairs=$(echo "$failed" | awk -F'"' '
         /"clientId"/ { client=$4 }
@@ -752,9 +752,9 @@ diag_reset_failed() {
     done
 
     echo ""
-    echo "  [1] Alle auf 'setup' setzen (erneut versuchen)"
-    echo "  [2] Alle auf 'none' setzen (ignorieren)"
-    echo "  [0] Abbrechen"
+    echo "  [1] Set all to 'setup' (retry)"
+    echo "  [2] Set all to 'none' (ignore)"
+    echo "  [0] Cancel"
     echo ""
     read -p "Select: " reset_choice
 
@@ -765,7 +765,7 @@ diag_reset_failed() {
     esac
 
     echo ""
-    echo "Setze alle auf '$action'..."
+    echo "Setting all to '$action'..."
 
     echo "$pairs" | while read -r client_id product_id; do
         if LC_ALL=C opsi-admin -d method setProductActionRequest "$product_id" "$client_id" "$action" 2>/dev/null; then
@@ -781,10 +781,10 @@ diag_reset_failed() {
 
 diag_client() {
     echo ""
-    echo "--- Client-Status ---"
+    echo "--- Client Status ---"
     echo ""
 
-    read -p "Client-ID (e.g. bio-pc01.paedml-linux.lokal): " client_id
+    read -p "Client ID (e.g. bio-pc01.paedml-linux.lokal): " client_id
     if [ -z "$client_id" ]; then
         echo "Aborted."
         return
@@ -797,22 +797,22 @@ diag_client() {
     client_info=$(LC_ALL=C opsi-admin -d method host_getObjects '[]' "{\"id\":\"$client_id\"}" 2>/dev/null)
 
     if [ -z "$client_info" ] || [ "$client_info" = "[]" ]; then
-        echo "Client nicht gefunden: $client_id"
+        echo "Client not found: $client_id"
         return
     fi
 
     echo ""
-    echo "Client-Info:"
+    echo "Client info:"
     ip=$(echo "$client_info" | grep '"ipAddress"' | sed 's/.*: "//;s/".*//')
     mac=$(echo "$client_info" | grep '"hardwareAddress"' | sed 's/.*: "//;s/".*//')
     last_seen=$(echo "$client_info" | grep '"lastSeen"' | sed 's/.*: "//;s/".*//')
-    echo "  IP:          ${ip:-unbekannt}"
-    echo "  MAC:         ${mac:-unbekannt}"
-    echo "  Zuletzt gesehen: ${last_seen:-unbekannt}"
+    echo "  IP:          ${ip:-unknown}"
+    echo "  MAC:         ${mac:-unknown}"
+    echo "  Last seen:   ${last_seen:-unknown}"
 
     # Reachability
     echo ""
-    echo "Erreichbarkeit:"
+    echo "Reachability:"
     if ping -c 1 -W 2 "$client_id" > /dev/null 2>&1; then
         echo "  ONLINE"
     else
@@ -821,10 +821,10 @@ diag_client() {
 
     # Pending actions
     echo ""
-    echo "Ausstehende Aktionen:"
+    echo "Pending actions:"
     pending=$(LC_ALL=C opsi-admin -d method productOnClient_getObjects '[]' "{\"clientId\":\"$client_id\",\"actionRequest\":\"setup\"}" 2>/dev/null)
     if [ -z "$pending" ] || [ "$pending" = "[]" ]; then
-        echo "  Keine"
+        echo "  None"
     else
         echo "$pending" | grep '"productId"' | sed 's/.*: "//;s/".*//' | while read -r p; do
             echo "  $p (setup)"
@@ -833,10 +833,10 @@ diag_client() {
 
     # Failed
     echo ""
-    echo "Fehlgeschlagen:"
+    echo "Failed:"
     failed=$(LC_ALL=C opsi-admin -d method productOnClient_getObjects '[]' "{\"clientId\":\"$client_id\",\"actionResult\":\"failed\"}" 2>/dev/null)
     if [ -z "$failed" ] || [ "$failed" = "[]" ]; then
-        echo "  Keine"
+        echo "  None"
     else
         echo "$failed" | grep '"productId"' | sed 's/.*: "//;s/".*//' | while read -r p; do
             echo "  $p (FAILED)"
@@ -846,21 +846,21 @@ diag_client() {
 
 diag_logs() {
     echo ""
-    echo "--- Client-Logs ---"
+    echo "--- Client Logs ---"
     echo ""
 
-    read -p "Client-ID (e.g. bio-pc01.paedml-linux.lokal): " client_id
+    read -p "Client ID (e.g. bio-pc01.paedml-linux.lokal): " client_id
     if [ -z "$client_id" ]; then
         echo "Aborted."
         return
     fi
 
     echo ""
-    echo "  [1] Installations-Log (instlog)"
-    echo "  [2] Client-Verbindung (clientconnect)"
-    echo "  [3] Boot-Image (bootimage)"
+    echo "  [1] Installation log (instlog)"
+    echo "  [2] Client connection (clientconnect)"
+    echo "  [3] Boot image (bootimage)"
     echo ""
-    read -p "Log-Typ: " log_choice
+    read -p "Log type: " log_choice
 
     case "$log_choice" in
         1) log_type="instlog" ;;
@@ -873,7 +873,7 @@ diag_logs() {
     log_file="/var/log/opsi/${log_type}/${client_id}.log"
     if [ -f "$log_file" ]; then
         echo ""
-        echo "--- Letzte 50 Zeilen: $log_file ---"
+        echo "--- Last 50 lines: $log_file ---"
         echo ""
         tail -50 "$log_file"
     else
@@ -885,7 +885,7 @@ diag_logs() {
 
 diag_services() {
     echo ""
-    echo "--- OPSI-Dienste ---"
+    echo "--- OPSI Services ---"
     echo ""
 
     for svc in opsiconfd opsipxeconfd; do
@@ -898,42 +898,42 @@ diag_services() {
     done
 
     echo ""
-    echo "opsiconfd Info:"
+    echo "opsiconfd info:"
     if command -v opsiconfd > /dev/null 2>&1; then
-        opsiconfd -v 2>/dev/null || echo "  Version nicht ermittelbar"
+        opsiconfd -v 2>/dev/null || echo "  Version not available"
     fi
 
     echo ""
-    echo "Backend-Verbindung:"
+    echo "Backend connection:"
     if LC_ALL=C opsi-admin -d method backend_info > /dev/null 2>&1; then
         echo "  OK"
     else
-        echo "  FEHLER"
+        echo "  ERROR"
     fi
 }
 
 diag_disk() {
     echo ""
-    echo "--- Festplattenplatz ---"
+    echo "--- Disk Space ---"
     echo ""
 
     echo "Depot/Workbench:"
-    df -h /var/lib/opsi 2>/dev/null || echo "  /var/lib/opsi nicht gefunden"
+    df -h /var/lib/opsi 2>/dev/null || echo "  /var/lib/opsi not found"
 
     echo ""
-    echo "Workbench-Groesse:"
+    echo "Workbench size:"
     if [ -d "$WORKBENCH" ]; then
         du -sh "$WORKBENCH" 2>/dev/null
     else
-        echo "  Workbench nicht vorhanden"
+        echo "  Workbench not present"
     fi
 
     echo ""
-    echo "Repository-Groesse:"
+    echo "Repository size:"
     if [ -d "/var/lib/opsi/repository" ]; then
         du -sh /var/lib/opsi/repository 2>/dev/null
     else
-        echo "  Repository nicht vorhanden"
+        echo "  Repository not present"
     fi
 }
 
@@ -1073,12 +1073,12 @@ run_opsi() {
     ro_err=$(echo "$ro_out" | grep -iE 'error|failed|cannot|critical|traceback' | grep -viE 'no error|0 error' | sed 's/^/  /')
 
     ro_sum=""
-    [ -n "$ro_inst" ] && ro_sum="${ro_sum}Installiert / aktualisiert:${nl}${ro_inst}${nl}${nl}"
-    [ -n "$ro_dl" ] && ro_sum="${ro_sum}Heruntergeladen:${nl}${ro_dl}${nl}${nl}"
-    [ -n "$ro_err" ] && ro_sum="${ro_sum}FEHLER / Warnungen:${nl}${ro_err}${nl}${nl}"
-    [ -z "$ro_sum" ] && ro_sum="Keine Aenderungen - nichts zu tun.${nl}"
+    [ -n "$ro_inst" ] && ro_sum="${ro_sum}Installed / updated:${nl}${ro_inst}${nl}${nl}"
+    [ -n "$ro_dl" ] && ro_sum="${ro_sum}Downloaded:${nl}${ro_dl}${nl}${nl}"
+    [ -n "$ro_err" ] && ro_sum="${ro_sum}ERRORS / warnings:${nl}${ro_err}${nl}${nl}"
+    [ -z "$ro_sum" ] && ro_sum="No changes - nothing to do.${nl}"
 
-    whiptail --title "Ergebnis" --scrolltext --msgbox "$ro_sum" 24 86
+    whiptail --title "Result" --scrolltext --msgbox "$ro_sum" 24 86
 }
 
 # Ask install vs download for the given product ids, confirm, then run with summary.
@@ -1087,9 +1087,9 @@ fetch_products() {
     [ -z "$fp_prods" ] && return
     nl=$'\n'
 
-    fp_choice=$(whiptail --title "Was tun?" --menu "Ausgewaehlt:${nl}${nl}${fp_prods}" 16 72 2 \
-        "1" "Herunterladen UND installieren" \
-        "2" "Nur herunterladen" \
+    fp_choice=$(whiptail --title "What to do?" --menu "Selected:${nl}${nl}${fp_prods}" 16 72 2 \
+        "1" "Download AND install" \
+        "2" "Download only" \
         3>&1 1>&2 2>&3)
     [ $? -ne 0 ] && return
     case "$fp_choice" in
@@ -1099,15 +1099,15 @@ fetch_products() {
     esac
 
     if [ "$fp_action" = "install" ]; then
-        whiptail --yesno "Diese Pakete ins Depot INSTALLIEREN?${nl}${nl}${fp_prods}" 16 72 || return
+        whiptail --yesno "INSTALL these packages onto the depot?${nl}${nl}${fp_prods}" 16 72 || return
     fi
 
-    run_opsi "Arbeite..." "$fp_action" $fp_prods
+    run_opsi "Working..." "$fp_action" $fp_prods
 }
 
 # Get updatable product ids (one per line) into $UPD_LIST
 load_updatable() {
-    run_spin "Pruefe auf Updates..." env LC_ALL=C opsi-package-updater list --updatable-products
+    run_spin "Checking for updates..." env LC_ALL=C opsi-package-updater list --updatable-products
     UPD_LIST=$(echo "$SPIN_OUT" | awk -F: '/\(updatable from:/ {id=$1; gsub(/[[:space:]]/,"",id); print id}' | sort -u)
 }
 
@@ -1115,7 +1115,7 @@ load_updatable() {
 # A valid .opsi tar contains an "OPSI" metadata member; if it's missing the file is broken.
 check_broken_packages() {
     [ -d /var/lib/opsi/repository ] || return
-    run_spin "Pruefe Repository auf beschaedigte Pakete..." bash -c '
+    run_spin "Checking repository for broken packages..." bash -c '
         for f in /var/lib/opsi/repository/*.opsi; do
             [ -e "$f" ] || continue
             tar -tf "$f" 2>/dev/null | grep -qiE "(^|/)OPSI" || echo "$f"
@@ -1125,12 +1125,12 @@ check_broken_packages() {
 
     nl=$'\n'
     cb_names=$(echo "$cb_broken" | sed 's#.*/##; s/^/  /')
-    if whiptail --title "Beschaedigte Pakete gefunden" \
-        --yesno "Diese .opsi-Dateien sind unvollstaendig oder defekt (z.B. abgebrochener Download):${nl}${nl}${cb_names}${nl}${nl}Jetzt loeschen? (werden bei Bedarf automatisch neu geladen)" 20 78; then
+    if whiptail --title "Broken packages found" \
+        --yesno "These .opsi files are incomplete or corrupt (e.g. an aborted download):${nl}${nl}${cb_names}${nl}${nl}Delete them now? (they will be re-downloaded when needed)" 20 78; then
         echo "$cb_broken" | while IFS= read -r bf; do
             [ -n "$bf" ] && rm -f "$bf"
         done
-        whiptail --msgbox "Beschaedigte Pakete geloescht.${nl}Hole sie bei Bedarf neu ueber das Menue." 9 60
+        whiptail --msgbox "Broken packages deleted.${nl}They will be fetched again when needed via the menu." 9 64
     fi
 }
 
@@ -1147,12 +1147,12 @@ do_update() {
     check_broken_packages
 
     while true; do
-        choice=$(whiptail --title "Update aus Repository" \
-            --menu "Was moechtest du tun?" 13 68 4 \
-            "1" "Installierte Pakete aktualisieren" \
-            "2" "Aus verfuegbaren Updates auswaehlen" \
-            "3" "Neues Paket holen (Liste durchsuchen)" \
-            "0" "Zurueck" \
+        choice=$(whiptail --title "Update from repository" \
+            --menu "What do you want to do?" 13 68 4 \
+            "1" "Update installed packages" \
+            "2" "Pick from available updates" \
+            "3" "Get a new package (search list)" \
+            "0" "Back" \
             3>&1 1>&2 2>&3)
         [ $? -ne 0 ] && return
 
@@ -1160,22 +1160,22 @@ do_update() {
             1)
                 load_updatable
                 if [ -z "$UPD_LIST" ]; then
-                    whiptail --msgbox "Alles aktuell - keine Updates verfuegbar." 8 55
+                    whiptail --msgbox "Everything up to date - no updates available." 8 55
                     continue
                 fi
                 cnt=$(echo "$UPD_LIST" | wc -l)
                 nl=$'\n'
                 box_h=$(( cnt + 10 ))
                 [ "$box_h" -gt 24 ] && box_h=24
-                if whiptail --title "Updates verfuegbar" \
-                    --yesno "${cnt} Update(s):${nl}${nl}$(echo "$UPD_LIST" | sed 's/^/  /')${nl}${nl}Jetzt alle installieren?" $box_h 70; then
-                    run_opsi "Aktualisiere..." update
+                if whiptail --title "Updates available" \
+                    --yesno "${cnt} update(s):${nl}${nl}$(echo "$UPD_LIST" | sed 's/^/  /')${nl}${nl}Install all now?" $box_h 70; then
+                    run_opsi "Updating..." update
                 fi
                 ;;
             2)
                 load_updatable
                 if [ -z "$UPD_LIST" ]; then
-                    whiptail --msgbox "Alles aktuell - keine Updates verfuegbar." 8 55
+                    whiptail --msgbox "Everything up to date - no updates available." 8 55
                     continue
                 fi
                 cnt=$(echo "$UPD_LIST" | wc -l)
@@ -1185,20 +1185,20 @@ do_update() {
                 for p in $UPD_LIST; do
                     set -- "$@" "$p" "" OFF
                 done
-                sel=$(whiptail --title "Updates auswaehlen" --checklist "Leertaste = waehlen, Enter = OK" $((lh + 8)) 70 $lh "$@" 3>&1 1>&2 2>&3)
+                sel=$(whiptail --title "Select updates" --checklist "SPACE = select, ENTER = OK" $((lh + 8)) 70 $lh "$@" 3>&1 1>&2 2>&3)
                 [ $? -ne 0 ] && continue
                 sel=$(echo "$sel" | tr -d '"')
                 [ -z "$sel" ] && continue
                 fetch_products $sel
                 ;;
             3)
-                fltr=$(whiptail --title "Verfuegbare Pakete" --inputbox "Nach Name filtern (leer = alle anzeigen):" 9 62 "" 3>&1 1>&2 2>&3)
+                fltr=$(whiptail --title "Available packages" --inputbox "Filter by name (empty = show all):" 9 62 "" 3>&1 1>&2 2>&3)
                 [ $? -ne 0 ] && continue
-                run_spin "Lade Paketliste..." env LC_ALL=C opsi-package-updater list --products
+                run_spin "Loading package list..." env LC_ALL=C opsi-package-updater list --products
                 all_list=$(echo "$SPIN_OUT" | awk '/\(Version/ {print $1}' | sort -u)
                 [ -n "$fltr" ] && all_list=$(echo "$all_list" | grep -i "$fltr")
                 if [ -z "$all_list" ]; then
-                    whiptail --msgbox "Nichts gefunden." 8 50
+                    whiptail --msgbox "Nothing found." 8 50
                     continue
                 fi
                 acnt=$(echo "$all_list" | wc -l)
@@ -1208,7 +1208,7 @@ do_update() {
                 for p in $all_list; do
                     set -- "$@" "$p" "" OFF
                 done
-                sel=$(whiptail --title "Pakete auswaehlen ($acnt)" --checklist "Leertaste = waehlen, Enter = OK" $((lh + 8)) 72 $lh "$@" 3>&1 1>&2 2>&3)
+                sel=$(whiptail --title "Select packages ($acnt)" --checklist "SPACE = select, ENTER = OK" $((lh + 8)) 72 $lh "$@" 3>&1 1>&2 2>&3)
                 [ $? -ne 0 ] && continue
                 sel=$(echo "$sel" | tr -d '"')
                 [ -z "$sel" ] && continue
@@ -1231,7 +1231,7 @@ while true; do
     echo "  [4] Deploy to clients"
     echo "  [5] Wake-on-LAN"
     echo "  [6] List packages"
-    echo "  [7] Fehleranalyse"
+    echo "  [7] Diagnostics"
     echo "  [8] Update from repository"
     echo "  [0] Exit"
     echo ""
