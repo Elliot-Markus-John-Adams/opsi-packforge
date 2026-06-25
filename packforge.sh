@@ -952,9 +952,12 @@ diag_health() {
         return
     fi
 
-    # 'opsiconfd health-check' only exists in opsi >= 4.2. Running it on 4.1 would
-    # try to start a second daemon, so detect the version first (opsiconfd -v is safe).
-    ver=$(opsiconfd -v 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' | head -1)
+    # 'opsiconfd health-check' only exists in opsi >= 4.2. Detect the version first.
+    # Use dpkg (safe, works on all versions) before falling back to opsiconfd itself,
+    # because flag handling differs across opsi versions (-v on 4.1, --version on 4.2+).
+    ver=$(dpkg-query -W -f='${Version}' opsiconfd 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' | head -1)
+    [ -z "$ver" ] && ver=$(opsiconfd --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' | head -1)
+    [ -z "$ver" ] && ver=$(opsiconfd -v 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' | head -1)
     major=$(echo "$ver" | cut -d. -f1)
     minor=$(echo "$ver" | cut -d. -f2)
 
